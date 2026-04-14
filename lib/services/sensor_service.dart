@@ -28,19 +28,11 @@ class SensorService {
   void start() {
     _userAccel = userAccelerometerEventStream(
       samplingPeriod: SensorInterval.gameInterval,
-    ).listen(
-      _onUserAccel,
-      onError: (_) {},
-      cancelOnError: false,
-    );
+    ).listen(_onUserAccel, onError: (_) {}, cancelOnError: false);
 
     _gyro = gyroscopeEventStream(
       samplingPeriod: SensorInterval.normalInterval,
-    ).listen(
-      _onGyro,
-      onError: (_) {},
-      cancelOnError: false,
-    );
+    ).listen(_onGyro, onError: (_) {}, cancelOnError: false);
   }
 
   void _onUserAccel(UserAccelerometerEvent e) {

@@ -17,7 +17,7 @@ class StatBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final v = value.clamp(0, 100) / 100.0;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 2),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -26,25 +26,27 @@ class StatBar extends StatelessWidget {
             children: [
               Text(
                 label,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: Colors.white70,
+                      height: 1.1,
                     ),
               ),
               Text(
                 '${value.clamp(0, 100)}',
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: Colors.white54,
+                      height: 1.1,
                       fontFeatures: const [FontFeature.tabularFigures()],
                     ),
               ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           ClipRRect(
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
               value: v,
-              minHeight: 10,
+              minHeight: 5,
               backgroundColor: Colors.white12,
               color: color,
             ),

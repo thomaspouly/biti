@@ -62,6 +62,13 @@ class LifecycleService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Récolte d’un point de nourriture sur la grille.
+  void collectFoodMorsel() {
+    hunger = min(100, hunger + 12);
+    mood = min(100, mood + 3);
+    notifyListeners();
+  }
+
   /// Jouer : coûte un peu d’énergie, remonte l’humeur, court état excité.
   void play() {
     energy = max(0, energy - 12);

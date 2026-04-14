@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../models/creature.dart';
@@ -12,12 +14,16 @@ class PixelGrid extends StatelessWidget {
     required this.creature,
     required this.mood,
     required this.lean,
+    this.onCellTap,
   });
 
   final PixelGridModel model;
   final Creature creature;
   final CreatureMood mood;
   final double lean;
+
+  /// Coordonnées grille : excrément, nourriture, etc.
+  final void Function(int gridX, int gridY)? onCellTap;
 
   @override
   Widget build(BuildContext context) {
@@ -28,6 +34,8 @@ class PixelGrid extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final side = constraints.biggest.shortestSide;
+          final cellW = side / model.width;
+          final cellH = side / model.height;
           return SizedBox(
             width: side,
             height: side,
@@ -49,6 +57,19 @@ class PixelGrid extends StatelessWidget {
                   ),
                   size: Size.square(side),
                 ),
+                if (onCellTap != null)
+                  Positioned.fill(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onTapUp: (details) {
+                        final lx = details.localPosition.dx;
+                        final ly = details.localPosition.dy;
+                        final gx = (lx / cellW).floor().clamp(0, model.width - 1);
+                        final gy = (ly / cellH).floor().clamp(0, model.height - 1);
+                        onCellTap!(gx, gy);
+                      },
+                    ),
+                  ),
               ],
             ),
           );
@@ -88,6 +109,7 @@ class PixelGridPainter extends CustomPainter {
           // Le sprite animé + penché est dessiné par [CreaturePainter].
           final alt = (x + y).isEven;
           paint.color = Color.lerp(baseEmpty, altEmpty, alt ? 0.12 : 0) ?? baseEmpty;
+          canvas.drawRect(rect, paint);
         } else if (cell.kind == CellKind.empty) {
           final alt = (x + y).isEven;
           paint.color = Color.lerp(
@@ -96,11 +118,21 @@ class PixelGridPainter extends CustomPainter {
                 alt ? 0.12 : 0,
               ) ??
               cell.color;
+          canvas.drawRect(rect, paint);
+        } else if (cell.kind == CellKind.waste) {
+          paint.color = cell.color;
+          canvas.drawRect(rect, paint);
+        } else if (cell.kind == CellKind.food) {
+          final alt = (x + y).isEven;
+          paint.color = Color.lerp(baseEmpty, altEmpty, alt ? 0.12 : 0) ?? baseEmpty;
+          canvas.drawRect(rect, paint);
+          paint.color = cell.color;
+          final r = math.min(cellW, cellH) * 0.38;
+          canvas.drawCircle(rect.center, r, paint);
         } else {
           paint.color = cell.color;
+          canvas.drawRect(rect, paint);
         }
-
-        canvas.drawRect(rect, paint);
       }
     }
   }
