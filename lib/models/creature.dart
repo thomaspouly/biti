@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'creature_growth.dart';
+
 /// Humeur / état d’animation affiché (dérivé du [LifecycleService] + actions).
 enum CreatureMood {
   idle,
@@ -26,8 +28,10 @@ class Creature {
 
   int gridX;
   int gridY;
-  final int spriteWidth;
-  final int spriteHeight;
+
+  /// Mis à jour selon le niveau de croissance (taille du sprite sur la grille).
+  int spriteWidth;
+  int spriteHeight;
 
   int frameIndex = 0;
 
@@ -61,9 +65,26 @@ class CreatureSpriteLibrary {
     return builtIn[mood] ?? builtIn[CreatureMood.idle]!;
   }
 
-  static SpriteFrame currentFrame(CreatureMood mood, int index) {
+  /// [growthLevel] entre 1 et 6 (voir [CreatureGrowth]).
+  static SpriteFrame currentFrame(
+    CreatureMood mood,
+    int index,
+    int growthLevel,
+  ) {
+    final lv = growthLevel.clamp(1, 6);
     final frames = framesFor(mood);
-    return frames[index % frames.length];
+    final base = frames[index % frames.length];
+    final span = CreatureGrowth.gridSpanForLevel(lv);
+    switch (lv) {
+      case 1:
+        return _level1Frame(base, mood);
+      case 2:
+        return _scaleNearest(base, 2, 2);
+      case 3:
+        return base;
+      default:
+        return _scaleNearest(base, span, span);
+    }
   }
 }
 
@@ -75,126 +96,123 @@ const Color _k = Color(0xFF2D3436);
 const Color _r = Color(0xFFE17055);
 const Color _y = Color(0xFFFDCB6E);
 
+SpriteFrame _level1Frame(SpriteFrame base, CreatureMood mood) {
+  final cy = base.length ~/ 2;
+  final cx = base.first.length ~/ 2;
+  final c = base[cy][cx];
+  if (c.a > 0) {
+    return [
+      [c],
+    ];
+  }
+  return [
+    [_moodBodyColor(mood)],
+  ];
+}
+
+Color _moodBodyColor(CreatureMood mood) {
+  switch (mood) {
+    case CreatureMood.hungry:
+      return _d;
+    case CreatureMood.excited:
+      return _y;
+    case CreatureMood.sleeping:
+      return _b;
+    default:
+      return _b;
+  }
+}
+
+/// Agrandissement / réduction par voisin le plus proche (référence 5×5 → cible).
+SpriteFrame _scaleNearest(SpriteFrame src, int outW, int outH) {
+  if (src.isEmpty || src.first.isEmpty) return src;
+  final sh = src.length;
+  final sw = src.first.length;
+  return List.generate(outH, (y) {
+    return List.generate(outW, (x) {
+      final sy = (y * sh / outH).floor().clamp(0, sh - 1);
+      final sx = (x * sw / outW).floor().clamp(0, sw - 1);
+      return src[sy][sx];
+    });
+  });
+}
+
+/// Sprites 5×5 (une lettre = un pixel de couleur, `.` = transparent).
 List<SpriteFrame> _idle() => [
       _parse([
-        '..........',
-        '...bbbb...',
-        '..bbbbbb..',
-        '.bbbbbbbb.',
-        '.bbwwwwbb.',
-        '.bbkwwkbb.',
-        '.bbbbbbbb.',
-        '..bbbbbb..',
-        '...bbbb...',
-        '..........',
+        '..b..',
+        '.bbb.',
+        'bwkwb',
+        '.bbb.',
+        '..b..',
       ]),
       _parse([
-        '..........',
-        '...bbbb...',
-        '..bbbbbb..',
-        '.bbbbbbbb.',
-        '.bbwwwwbb.',
-        '.bbkddkbb.',
-        '.bbbbbbbb.',
-        '..bbbbbb..',
-        '...bbbb...',
-        '..........',
+        '..b..',
+        '.bbb.',
+        'bkdkb',
+        '.bbb.',
+        '..b..',
       ]),
     ];
 
 List<SpriteFrame> _hungry() => [
       _parse([
-        '..........',
-        '...dddd...',
-        '..dddddd..',
-        '.dddddddd.',
-        '.ddwwwwdd.',
-        '.ddkrrkdd.',
-        '.dddddddd.',
-        '..dddddd..',
-        '...dddd...',
-        '..........',
+        '..d..',
+        '.ddd.',
+        'dwrwd',
+        '.ddd.',
+        '..d..',
       ]),
     ];
 
 List<SpriteFrame> _happy() => [
       _parse([
-        '..........',
-        '...bbbb...',
-        '..bbbbbb..',
-        '.bbbbbbbb.',
-        '.bbwwwwbb.',
-        '.bbkwwkbb.',
-        '.bbbyybb..',
-        '..bbbbbb..',
-        '...bbbb...',
-        '..........',
+        '..b..',
+        '.bbb.',
+        'bwkwb',
+        'byyyb',
+        '..b..',
       ]),
       _parse([
-        '..........',
-        '...bbbb...',
-        '..bbbbbb..',
-        '.bbbbbbbb.',
-        '.bbwwwwbb.',
-        '.bbkwwkbb.',
-        '..byyyyb..',
-        '..bbbbbb..',
-        '...bbbb...',
-        '..........',
+        '.y.y.',
+        '.bbb.',
+        'bwkwb',
+        '.bbb.',
+        '..b..',
       ]),
     ];
 
 List<SpriteFrame> _sleeping() => [
       _parse([
-        '..........',
-        '...bbbb...',
-        '..bbbbbb..',
-        '.bbbbbbbb.',
-        '.bbkkkkbb.',
-        '.bbbbbbbb.',
-        '..byybb...',
-        '...bbbb...',
-        '....z.....',
-        '..........',
+        '..b..',
+        '.bbb.',
+        'bkkkb',
+        '.bbb.',
+        '..z..',
       ]),
       _parse([
-        '..........',
-        '...bbbb...',
-        '..bbbbbb..',
-        '.bbbbbbbb.',
-        '.bbkkkkbb.',
-        '.bbbbbbbb.',
-        '..byybb...',
-        '...bbbb...',
-        '...zz.....',
-        '..........',
+        '..b..',
+        '.bbb.',
+        'bkkkb',
+        '.bbb.',
+        '..zz.',
       ]),
     ];
 
 List<SpriteFrame> _excited() => [
       _parse([
-        'y........y',
-        '.ybbbbbb.',
-        '..bbbbbb..',
-        '.bbbbbbbb.',
-        '.bbwwwwbb.',
-        '.bbkwwkbb.',
-        '.bbbbbbbb.',
-        '..byyyyb..',
-        '.ybbbbbby.',
-        'y........y',
+        'y...y',
+        '.bbb.',
+        'bwkwb',
+        'byyyb',
+        'y...y',
       ]),
       _parse([
-        'y........y',
-        '.ybbbbbb.',
-        '..bbbbbb..',
-        '.bbbbbbbb.',
-        '.bbwwwwbb.',
-        '.bbkwwkbb.',
-        '.bbbbbbbb.',
-        '..byyyyb..',
-        '.ybbbbbby.',
-        'y........y',
+        'y.b.y',
+        '.bbb.',
+        'bwkwb',
+        'byyyb',
+        'y.b.y',
       ]),
     ];
 

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+/// Fraction du côté de case laissée vide (« joint ») autour du carreau dessiné (10 % de chaque côté → cœur 80 %).
+const double gameBoardCellPaddingRatio = 0.03;
+
 /// État logique d'une cellule dans le monde grille.
 enum CellKind {
   /// Cellule vide (fond).

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../models/creature.dart';
+import '../models/grid.dart';
 
 /// Dessine la frame courante du sprite avec un léger penché ([Creature.lean]).
 class CreaturePainter extends CustomPainter {
@@ -28,12 +29,16 @@ class CreaturePainter extends CustomPainter {
 
     final cellW = size.width / gridWidth;
     final cellH = size.height / gridHeight;
+    final padX = cellW * gameBoardCellPaddingRatio;
+    final padY = cellH * gameBoardCellPaddingRatio;
+    final innerW = cellW - 2 * padX;
+    final innerH = cellH - 2 * padY;
 
-    final originX = creatureX * cellW;
-    final originY = creatureY * cellH;
+    final originX = creatureX * cellW + padX;
+    final originY = creatureY * cellH + padY;
 
-    final spritePixelW = frame.first.length * cellW;
-    final spritePixelH = frame.length * cellH;
+    final spritePixelW = frame.first.length * innerW;
+    final spritePixelH = frame.length * innerH;
     final cx = originX + spritePixelW / 2;
     final cy = originY + spritePixelH / 2;
 
@@ -48,10 +53,10 @@ class CreaturePainter extends CustomPainter {
         final color = row[x];
         if (color.a == 0) continue;
         final rect = Rect.fromLTWH(
-          originX + x * cellW,
-          originY + y * cellH,
-          cellW + 0.5,
-          cellH + 0.5,
+          originX + x * innerW,
+          originY + y * innerH,
+          innerW + 0.5,
+          innerH + 0.5,
         );
         final paint = Paint()..color = color;
         canvas.drawRect(rect, paint);

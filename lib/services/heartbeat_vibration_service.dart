@@ -28,24 +28,22 @@ class HeartbeatVibrationService {
   }
 
   void _onLifecycle() {
-    if (_lifecycle.sleeping) {
+    if (_lifecycle.isDead || _lifecycle.sleeping) {
       _timer?.cancel();
       _timer = null;
       return;
     }
-    if (_timer == null) {
-      _timer = Timer(Duration.zero, _onBeat);
-    }
+    _timer ??= Timer(Duration.zero, _onBeat);
   }
 
   void _onBeat() {
     _timer = null;
-    if (_lifecycle.sleeping) return;
+    if (_lifecycle.isDead || _lifecycle.sleeping) return;
 
     HapticFeedback.mediumImpact();
     unawaited(
       Future<void>.delayed(const Duration(milliseconds: 95), () {
-        if (!_lifecycle.sleeping) {
+        if (!_lifecycle.isDead && !_lifecycle.sleeping) {
           HapticFeedback.lightImpact();
         }
       }),
