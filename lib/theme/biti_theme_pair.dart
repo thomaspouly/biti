@@ -27,10 +27,10 @@ class BitiThemePair {
       mix(_aIsLighter ? 0.28 : 0.72).withValues(alpha: 0.55);
 
   /// Panneaux (boutons, feuille paramètres).
-  Color get panel => mix(0.38);
+  Color get panel => mix(0.2);
 
   /// Remplissage « fort » des barres (faim / énergie / humeur / niveau).
-  Color get barAccent => mix(0.68);
+  Color get barAccent => mix(0.6);
 
   /// Remplissage alternatif pour distinguer les jauges (toujours sur le même segment).
   Color barSecondary(double offset) => mix((0.58 + offset).clamp(0.0, 1.0));
