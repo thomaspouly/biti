@@ -42,7 +42,7 @@ class BitiThemePair {
   Color get sheetBackground => mix(_aIsLighter ? 0.9 : 0.14);
 
   /// Cinq combinaisons prédéfinies (ordre : clair → foncé).
-  static const List<BitiThemePair> presets = [
+  static const List<BitiThemePair> presets = <BitiThemePair>[
     BitiThemePair(a: Color(0xFFC6BBAA), b: Color(0xFF010000)),
     BitiThemePair(a: Color(0xFF2A1111), b: Color(0xFFCEBDB6)),
     BitiThemePair(a: Color(0xFF000000), b: Color(0xFFC6BEAC)),

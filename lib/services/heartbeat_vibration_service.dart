@@ -14,11 +14,11 @@ class HeartbeatVibrationService {
 
   /// Durée d’un cycle cardiaque (du 1er choc au suivant), selon l’énergie (0–100).
   Duration _cycleFromEnergy() {
-    final t = (_lifecycle.energy / 100).clamp(0.0, 1.0);
+    final double t = (_lifecycle.energy / 100).clamp(0.0, 1.0);
     // Haute énergie ≈ 72 bpm ; très basse ≈ 28 bpm (cycle plus long).
-    const minMs = 520;
-    const maxMs = 2150;
-    final ms = (maxMs - t * (maxMs - minMs)).round();
+    const int minMs = 520;
+    const int maxMs = 2150;
+    final int ms = (maxMs - t * (maxMs - minMs)).round();
     return Duration(milliseconds: ms);
   }
 

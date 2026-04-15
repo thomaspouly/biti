@@ -21,30 +21,30 @@ const double _tapSlopInCellUnits = 1.9;
   double cellW,
   double cellH,
 ) {
-  final w = model.width;
-  final h = model.height;
-  final gx0 = (lx / cellW).floor().clamp(0, w - 1);
-  final gy0 = (ly / cellH).floor().clamp(0, h - 1);
+  final int w = model.width;
+  final int h = model.height;
+  final int gx0 = (lx / cellW).floor().clamp(0, w - 1);
+  final int gy0 = (ly / cellH).floor().clamp(0, h - 1);
 
-  final maxDist = math.max(cellW, cellH) * _tapSlopInCellUnits;
-  final maxDist2 = maxDist * maxDist;
+  final double maxDist = math.max(cellW, cellH) * _tapSlopInCellUnits;
+  final double maxDist2 = maxDist * maxDist;
 
-  var bestD2 = maxDist2 + 1.0;
-  var bestGx = gx0;
-  var bestGy = gy0;
-  var found = false;
+  double bestD2 = maxDist2 + 1.0;
+  int bestGx = gx0;
+  int bestGy = gy0;
+  bool found = false;
 
-  for (var dy = -_tapSearchRadiusCells; dy <= _tapSearchRadiusCells; dy++) {
-    for (var dx = -_tapSearchRadiusCells; dx <= _tapSearchRadiusCells; dx++) {
-      final gx = gx0 + dx;
-      final gy = gy0 + dy;
+  for (int dy = -_tapSearchRadiusCells; dy <= _tapSearchRadiusCells; dy++) {
+    for (int dx = -_tapSearchRadiusCells; dx <= _tapSearchRadiusCells; dx++) {
+      final int gx = gx0 + dx;
+      final int gy = gy0 + dy;
       if (gx < 0 || gx >= w || gy < 0 || gy >= h) continue;
-      final kind = model.cellAt(gx, gy).kind;
+      final CellKind kind = model.cellAt(gx, gy).kind;
       if (kind != CellKind.waste && kind != CellKind.food) continue;
 
-      final cx = (gx + 0.5) * cellW;
-      final cy = (gy + 0.5) * cellH;
-      final d2 = (lx - cx) * (lx - cx) + (ly - cy) * (ly - cy);
+      final double cx = (gx + 0.5) * cellW;
+      final double cy = (gy + 0.5) * cellH;
+      final double d2 = (lx - cx) * (lx - cx) + (ly - cy) * (ly - cy);
       if (d2 <= maxDist2 && d2 < bestD2) {
         bestD2 = d2;
         bestGx = gx;
@@ -89,21 +89,21 @@ class PixelGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final frame = CreatureSpriteLibrary.currentFrame(
+    final SpriteFrame frame = CreatureSpriteLibrary.currentFrame(
       mood,
       creature.frameIndex,
       growthLevel,
     );
 
     return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        final height = constraints.maxHeight;
-        final cellW = width / model.width;
-        final cellH = height / model.height;
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double width = constraints.maxWidth;
+        final double height = constraints.maxHeight;
+        final double cellW = width / model.width;
+        final double cellH = height / model.height;
         return Stack(
           fit: StackFit.expand,
-          children: [
+          children: <Widget>[
             CustomPaint(
               painter: PixelGridPainter(model: model, theme: theme),
             ),
@@ -122,9 +122,15 @@ class PixelGrid extends StatelessWidget {
               Positioned.fill(
                 child: GestureDetector(
                   behavior: HitTestBehavior.translucent,
-                  onTapUp: (details) {
-                    final p = details.localPosition;
-                    final t = _tapCellWithSlop(model, p.dx, p.dy, cellW, cellH);
+                  onTapUp: (TapUpDetails details) {
+                    final Offset p = details.localPosition;
+                    final (int, int) t = _tapCellWithSlop(
+                      model,
+                      p.dx,
+                      p.dy,
+                      cellW,
+                      cellH,
+                    );
                     onCellTap!(t.$1, t.$2);
                   },
                 ),
@@ -147,40 +153,40 @@ class PixelGridPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final w = model.width;
-    final h = model.height;
-    final cellW = size.width / w;
-    final cellH = size.height / h;
+    final int w = model.width;
+    final int h = model.height;
+    final double cellW = size.width / w;
+    final double cellH = size.height / h;
 
-    final padX = cellW * gameBoardCellPaddingRatio;
-    final padY = cellH * gameBoardCellPaddingRatio;
+    final double padX = cellW * gameBoardCellPaddingRatio;
+    final double padY = cellH * gameBoardCellPaddingRatio;
 
-    for (var y = 0; y < h; y++) {
-      for (var x = 0; x < w; x++) {
-        final cell = model.cellAt(x, y);
-        final rCell = Rect.fromLTWH(
+    for (int y = 0; y < h; y++) {
+      for (int x = 0; x < w; x++) {
+        final GridCell cell = model.cellAt(x, y);
+        final Rect rCell = Rect.fromLTWH(
           x * cellW + padX,
           y * cellH + padY,
           cellW - 2 * padX + 0.5,
           cellH - 2 * padY + 0.5,
         );
-        final corner = Radius.circular(
+        final Radius corner = Radius.circular(
           (math.min(rCell.width, rCell.height) * 0.3).clamp(0.6, 5.0),
         );
-        final rRCell = RRect.fromRectAndRadius(rCell, corner);
-        final paint = Paint();
+        final RRect rRCell = RRect.fromRectAndRadius(rCell, corner);
+        final Paint paint = Paint();
 
         if (cell.kind == CellKind.waste) {
           paint.color = _terrainBase;
           canvas.drawRRect(rRCell, paint);
           paint.color = theme.mix(0.8);
-          final r = math.min(rCell.width, rCell.height) * 0.38;
+          final double r = math.min(rCell.width, rCell.height) * 0.38;
           canvas.drawCircle(rCell.center, r, paint);
         } else if (cell.kind == CellKind.food) {
           paint.color = _terrainBase;
           canvas.drawRRect(rRCell, paint);
           paint.color = theme.mix(0.36);
-          final r = math.min(rCell.width, rCell.height) * 0.38;
+          final double r = math.min(rCell.width, rCell.height) * 0.38;
           canvas.drawCircle(rCell.center, r, paint);
         } else if (cell.kind == CellKind.filled) {
           paint.color = theme.mix(0.88);

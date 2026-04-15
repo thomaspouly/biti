@@ -9,17 +9,17 @@ import '../models/creature.dart';
 import '../models/creature_growth.dart';
 import '../models/grid.dart';
 import '../services/biti_storage.dart';
-import '../theme/biti_theme_pair.dart';
 import '../services/heartbeat_vibration_service.dart';
 import '../services/lifecycle_service.dart';
 import '../services/sensor_service.dart';
+import '../theme/biti_theme_pair.dart';
 import '../widgets/pixel_grid.dart';
 import '../widgets/stat_bar.dart';
 
 String _deathDurationLabel(Duration d) {
-  final minutes = d.inMinutes;
+  final int minutes = d.inMinutes;
   if (minutes >= 60 && minutes % 60 == 0) {
-    final h = minutes ~/ 60;
+    final int h = minutes ~/ 60;
     return '$h heure${h > 1 ? 's' : ''}';
   }
   return '$minutes minute${minutes > 1 ? 's' : ''}';
@@ -64,11 +64,8 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void initState() {
     super.initState();
-    _lifecycle = LifecycleService(
-      criticalStreakDuration: bitiDeathAfterCriticalLowStreak,
-      restored: widget.restoredProfile,
-    );
-    final initialSide = CreatureGrowth.terrainSideForLevel(
+    _lifecycle = LifecycleService(restored: widget.restoredProfile);
+    final int initialSide = CreatureGrowth.terrainSideForLevel(
       _lifecycle.growthLevel,
     );
     _grid = PixelGridModel(width: initialSide, height: initialSide);
@@ -82,7 +79,7 @@ class _HomeScreenState extends State<HomeScreen>
 
     _sensors = SensorService(
       onShake: _lifecycle.play,
-      onTilt: (v) {
+      onTilt: (double v) {
         if (!mounted) return;
         setState(() {
           _creature.lean = (_creature.lean * 0.88 + v * 0.12).clamp(-1.0, 1.0);
@@ -122,7 +119,7 @@ class _HomeScreenState extends State<HomeScreen>
       if (!mounted) return;
       setState(() {
         _syncGrid();
-        for (var i = 0; i < 5; i++) {
+        for (int i = 0; i < 5; i++) {
           _trySpawnFood();
         }
       });
@@ -131,7 +128,7 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _loadSavedTheme() async {
-    final i = await BitiStorage.loadThemePresetIndex();
+    final int i = await BitiStorage.loadThemePresetIndex();
     if (!mounted) return;
     setState(() => _themePresetIndex = i);
   }
@@ -162,8 +159,8 @@ class _HomeScreenState extends State<HomeScreen>
     if (_lifecycle.isDead) return;
     if (status != AnimationStatus.completed || !mounted) return;
     setState(() {
-      final mood = _lifecycle.derivedMood;
-      final n = CreatureSpriteLibrary.framesFor(mood).length;
+      final CreatureMood mood = _lifecycle.derivedMood;
+      final int n = CreatureSpriteLibrary.framesFor(mood).length;
       _creature.advanceFrame(n);
       _syncGrid();
     });
@@ -171,9 +168,9 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   void _syncGrid() {
-    final mood = _lifecycle.derivedMood;
-    final lvl = _lifecycle.growthLevel;
-    final frame = CreatureSpriteLibrary.currentFrame(
+    final CreatureMood mood = _lifecycle.derivedMood;
+    final int lvl = _lifecycle.growthLevel;
+    final SpriteFrame frame = CreatureSpriteLibrary.currentFrame(
       mood,
       _creature.frameIndex,
       lvl,
@@ -181,7 +178,7 @@ class _HomeScreenState extends State<HomeScreen>
     _creature.spriteWidth = frame.first.length;
     _creature.spriteHeight = frame.length;
 
-    final terrainSide = CreatureGrowth.terrainSideForLevel(lvl);
+    final int terrainSide = CreatureGrowth.terrainSideForLevel(lvl);
     if (terrainSide != _grid.width || terrainSide != _grid.height) {
       _grid = PixelGridModel(width: terrainSide, height: terrainSide);
       _creature.gridX = (terrainSide - _creature.spriteWidth) ~/ 2;
@@ -198,13 +195,13 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   void _randomStep() {
-    const options = <List<int>>[
-      [-1, 0],
-      [1, 0],
-      [0, -1],
-      [0, 1],
+    const List<List<int>> options = <List<int>>[
+      <int>[-1, 0],
+      <int>[1, 0],
+      <int>[0, -1],
+      <int>[0, 1],
     ];
-    final d = options[Random().nextInt(options.length)];
+    final List<int> d = options[Random().nextInt(options.length)];
     _creature.gridX += d[0];
     _creature.gridY += d[1];
     _creature.clampToGrid(_grid.width, _grid.height);
@@ -214,13 +211,13 @@ class _HomeScreenState extends State<HomeScreen>
   /// sprite (milieu de la boîte grille), après un déplacement.
   void _tryDropWaste() {
     if (_lifecycle.sleeping) return;
-    final jitter = 0.45 + Random().nextDouble() * 1.1;
+    final double jitter = 0.45 + Random().nextDouble() * 1.1;
     if (Random().nextDouble() > 0.38 / 15 * jitter) return;
 
-    final w = _creature.spriteWidth;
-    final h = _creature.spriteHeight;
-    final cx = _creature.gridX + (w - 1) ~/ 2;
-    final cy = _creature.gridY + (h - 1) ~/ 2;
+    final int w = _creature.spriteWidth;
+    final int h = _creature.spriteHeight;
+    final int cx = _creature.gridX + (w - 1) ~/ 2;
+    final int cy = _creature.gridY + (h - 1) ~/ 2;
     _grid.tryPlaceWaste(cx, cy);
   }
 
@@ -229,11 +226,11 @@ class _HomeScreenState extends State<HomeScreen>
     if (_grid.countFood() >= _maxFoodDots) return;
     // Probabilité par tick réduite de 50 % vs l’ancien barème (0,35 → 0,175).
     if (Random().nextDouble() > 0.175) return;
-    for (var i = 0; i < 24; i++) {
-      final w = _grid.width;
-      final h = _grid.height;
-      final x = 1 + Random().nextInt(w - 2);
-      final y = 1 + Random().nextInt(h - 2);
+    for (int i = 0; i < 24; i++) {
+      final int w = _grid.width;
+      final int h = _grid.height;
+      final int x = 1 + Random().nextInt(w - 2);
+      final int y = 1 + Random().nextInt(h - 2);
       if (_grid.tryPlaceFood(x, y)) return;
     }
   }
@@ -287,7 +284,7 @@ class _HomeScreenState extends State<HomeScreen>
                 constraints: const BoxConstraints(maxWidth: 360),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
+                  children: <Widget>[
                     Icon(
                       Icons.sentiment_very_dissatisfied,
                       size: 72,
@@ -332,14 +329,16 @@ class _HomeScreenState extends State<HomeScreen>
       );
     }
 
-    final mood = _lifecycle.derivedMood;
-    final displayGrowthLevel = _lifecycle.growthLevel;
-    final levelFill = CreatureGrowth.levelFillProgressFromXp(_lifecycle.xp);
-    final pair = BitiThemePair.presetOrDefault(_themePresetIndex);
-    final fg = pair.textStrong;
-    final fgMuted = pair.textMuted;
-    final trackBg = pair.trackBackground;
-    final panel = pair.panel;
+    final CreatureMood mood = _lifecycle.derivedMood;
+    final int displayGrowthLevel = _lifecycle.growthLevel;
+    final double levelFill = CreatureGrowth.levelFillProgressFromXp(
+      _lifecycle.xp,
+    );
+    final BitiThemePair pair = BitiThemePair.presetOrDefault(_themePresetIndex);
+    final Color fg = pair.textStrong;
+    final Color fgMuted = pair.textMuted;
+    final Color trackBg = pair.trackBackground;
+    final Color panel = pair.panel;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 280),
@@ -349,7 +348,7 @@ class _HomeScreenState extends State<HomeScreen>
         body: SafeArea(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+            children: <Widget>[
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
                 child: Text(
@@ -367,13 +366,13 @@ class _HomeScreenState extends State<HomeScreen>
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Spacer(flex: 1),
+                  children: <Widget>[
+                    const Spacer(),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
+                        children: <Widget>[
                           Expanded(
                             child: _LevelGaugeColumn(
                               level: displayGrowthLevel,
@@ -423,23 +422,24 @@ class _HomeScreenState extends State<HomeScreen>
                         horizontal: 2,
                       ),
                       child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final maxW = constraints.maxWidth;
+                        builder:
+                            (BuildContext context, BoxConstraints constraints) {
+                              final double maxW = constraints.maxWidth;
 
-                          return SizedBox(
-                            width: maxW,
-                            height: maxW,
-                            child: PixelGrid(
-                              model: _grid,
-                              creature: _creature,
-                              mood: mood,
-                              lean: _creature.lean,
-                              growthLevel: _lifecycle.growthLevel,
-                              theme: pair,
-                              onCellTap: _onCellTap,
-                            ),
-                          );
-                        },
+                              return SizedBox(
+                                width: maxW,
+                                height: maxW,
+                                child: PixelGrid(
+                                  model: _grid,
+                                  creature: _creature,
+                                  mood: mood,
+                                  lean: _creature.lean,
+                                  growthLevel: _lifecycle.growthLevel,
+                                  theme: pair,
+                                  onCellTap: _onCellTap,
+                                ),
+                              );
+                            },
                       ),
                     ),
 
@@ -470,7 +470,7 @@ class _HomeScreenState extends State<HomeScreen>
                         ),
                       ),
                     ),
-                    const Spacer(flex: 1),
+                    const Spacer(),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                       child: _BitiActionBar(
@@ -495,9 +495,9 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   double _actionButtonSide(BuildContext context) {
-    final w = MediaQuery.sizeOf(context).width - 32;
-    const gap = 8.0;
-    final raw = (w - 3 * gap) / 4;
+    final double w = MediaQuery.sizeOf(context).width - 32;
+    const double gap = 8.0;
+    final double raw = (w - 3 * gap) / 4;
     return raw.clamp(56, 80);
   }
 
@@ -515,7 +515,7 @@ class _HomeScreenState extends State<HomeScreen>
   void _showHelp(BuildContext context) {
     showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (BuildContext ctx) => AlertDialog(
         title: const Text('Aide'),
         content: SingleChildScrollView(
           child: Text(
@@ -545,7 +545,7 @@ class _HomeScreenState extends State<HomeScreen>
             'complètement puis rouvre-la pour une nouvelle partie.',
           ),
         ),
-        actions: [
+        actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('OK'),
@@ -556,7 +556,7 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   void _showSettings(BuildContext context) {
-    final pair = BitiThemePair.presetOrDefault(_themePresetIndex);
+    final BitiThemePair pair = BitiThemePair.presetOrDefault(_themePresetIndex);
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -564,10 +564,10 @@ class _HomeScreenState extends State<HomeScreen>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
-      builder: (ctx) => _BitiSettingsSheet(
+      builder: (BuildContext ctx) => _BitiSettingsSheet(
         initialPresetIndex: _themePresetIndex,
         lifecycle: _lifecycle,
-        onPresetSelected: (i) {
+        onPresetSelected: (int i) {
           setState(() => _themePresetIndex = i);
           unawaited(BitiStorage.saveThemePresetIndex(i));
         },
@@ -599,16 +599,17 @@ class _LevelGaugeColumn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final labelStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
-      color: labelColor,
-      height: 1.05,
-      fontFeatures: const [FontFeature.tabularFigures()],
-    );
+    final TextStyle? labelStyle = Theme.of(context).textTheme.labelSmall
+        ?.copyWith(
+          color: labelColor,
+          height: 1.05,
+          fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+        );
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+        children: <Widget>[
           Text(
             'LVL $level'.toUpperCase(),
             textAlign: TextAlign.center,
@@ -656,10 +657,10 @@ class _BitiActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const gap = 8.0;
+    const double gap = 8.0;
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
-      children: [
+      children: <Widget>[
         _SquareAction(
           size: buttonSide,
           panelColor: panelColor,
@@ -719,7 +720,7 @@ class _SquareAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final iconSize = (size * 0.48).clamp(24.0, 34.0);
+    final double iconSize = (size * 0.48).clamp(24.0, 34.0);
     return Semantics(
       button: true,
       label: semanticLabel,
@@ -782,15 +783,15 @@ class _BitiSettingsSheetState extends State<_BitiSettingsSheet> {
   }
 
   void _selectPreset(int i) {
-    final clamped = i.clamp(0, BitiThemePair.presets.length - 1);
+    final int clamped = i.clamp(0, BitiThemePair.presets.length - 1);
     setState(() => _presetIndex = clamped);
     widget.onPresetSelected(clamped);
   }
 
   @override
   Widget build(BuildContext context) {
-    final sheetFg = Colors.white.withValues(alpha: 0.94);
-    final sheetMuted = Colors.white70;
+    final Color sheetFg = Colors.white.withValues(alpha: 0.94);
+    const Color sheetMuted = Colors.white70;
 
     return SafeArea(
       child: Padding(
@@ -803,7 +804,7 @@ class _BitiSettingsSheetState extends State<_BitiSettingsSheet> {
         child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+            children: <Widget>[
               Center(
                 child: Container(
                   width: 40,
@@ -825,9 +826,9 @@ class _BitiSettingsSheetState extends State<_BitiSettingsSheet> {
               const SizedBox(height: 8),
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                leading: Icon(Icons.help_outline, color: sheetMuted),
+                leading: const Icon(Icons.help_outline, color: sheetMuted),
                 title: Text('Aide', style: TextStyle(color: sheetFg)),
-                trailing: Icon(Icons.chevron_right, color: sheetMuted),
+                trailing: const Icon(Icons.chevron_right, color: sheetMuted),
                 onTap: widget.onShowHelp,
               ),
               const Divider(color: Colors.white24),
@@ -861,7 +862,7 @@ class _BitiSettingsSheetState extends State<_BitiSettingsSheet> {
                   ),
                 ),
                 textCapitalization: TextCapitalization.words,
-                onSubmitted: (s) {
+                onSubmitted: (String s) {
                   widget.lifecycle.setName(s);
                   widget.onNameSaved();
                   FocusScope.of(context).unfocus();
@@ -891,7 +892,11 @@ class _BitiSettingsSheetState extends State<_BitiSettingsSheet> {
                 ),
               ),
               const SizedBox(height: 12),
-              for (var i = 0; i < BitiThemePair.presets.length; i++) ...[
+              for (
+                int i = 0;
+                i < BitiThemePair.presets.length;
+                i++
+              ) ...<Widget>[
                 if (i > 0) const SizedBox(height: 10),
                 _ThemePresetRow(
                   index: i,
@@ -937,14 +942,14 @@ class _ThemePresetRow extends StatelessWidget {
               color: selected ? Colors.white : Colors.white24,
               width: selected ? 2.5 : 1,
             ),
-            gradient: LinearGradient(colors: [pair.a, pair.b]),
+            gradient: LinearGradient(colors: <Color>[pair.a, pair.b]),
           ),
           child: Text(
             'Combinaison ${index + 1}',
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
               color: Colors.white,
               fontWeight: FontWeight.w700,
-              shadows: const [
+              shadows: const <Shadow>[
                 Shadow(
                   offset: Offset(0, 1),
                   blurRadius: 4,

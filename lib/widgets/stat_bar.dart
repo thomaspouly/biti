@@ -31,14 +31,13 @@ class StatBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final v = value.clamp(0, 100) / 100.0;
-    final lc = labelColor ?? Colors.white70;
-    final track = trackBackgroundColor ?? Colors.white12;
-    final labelStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: lc,
-          height: 1.05,
-        );
-    final bar = ClipRRect(
+    final double v = value.clamp(0, 100) / 100.0;
+    final Color lc = labelColor ?? Colors.white70;
+    final Color track = trackBackgroundColor ?? Colors.white12;
+    final TextStyle? labelStyle = Theme.of(
+      context,
+    ).textTheme.labelSmall?.copyWith(color: lc, height: 1.05);
+    final ClipRRect bar = ClipRRect(
       borderRadius: BorderRadius.circular(4),
       child: LinearProgressIndicator(
         value: v,
@@ -53,7 +52,7 @@ class StatBar extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+          children: <Widget>[
             Text(
               label,
               textAlign: TextAlign.center,
@@ -68,19 +67,20 @@ class StatBar extends StatelessWidget {
       );
     }
 
-    final valueStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
+    final TextStyle? valueStyle = Theme.of(context).textTheme.labelSmall
+        ?.copyWith(
           color: valueColor ?? Colors.white54,
           height: 1.05,
-          fontFeatures: const [FontFeature.tabularFigures()],
+          fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
         );
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+        children: <Widget>[
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
+            children: <Widget>[
               Text(label, style: labelStyle),
               Text('${value.clamp(0, 100)}', style: valueStyle),
             ],

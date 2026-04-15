@@ -44,7 +44,7 @@ class PixelGridModel {
     required this.height,
     Color emptyColor = const Color(0xFF16213E),
   }) : _emptyColor = emptyColor,
-       cells = List.generate(
+       cells = List<List<GridCell>>.generate(
          height,
          (_) => List<GridCell>.filled(width, GridCell(color: emptyColor)),
        );
@@ -71,7 +71,7 @@ class PixelGridModel {
 
   GridCell cellAt(int x, int y) {
     if (x < 0 || x >= width || y < 0 || y >= height) {
-      return GridCell(color: _emptyColor, kind: CellKind.empty);
+      return GridCell(color: _emptyColor);
     }
     return cells[y][x];
   }
@@ -82,9 +82,10 @@ class PixelGridModel {
   }
 
   int countWaste() {
-    var n = 0;
+    int n = 0;
+    // ignore: always_specify_types
     for (var y = 1; y < height - 1; y++) {
-      for (var x = 1; x < width - 1; x++) {
+      for (int x = 1; x < width - 1; x++) {
         if (cells[y][x].kind == CellKind.waste) n++;
       }
     }
@@ -95,7 +96,7 @@ class PixelGridModel {
   bool tryPlaceWaste(int x, int y) {
     if (countWaste() >= maxWastePieces) return false;
     if (x < 0 || x >= width || y < 0 || y >= height) return false;
-    final c = cells[y][x];
+    final GridCell c = cells[y][x];
     if (c.kind != CellKind.empty && c.kind != CellKind.creature) {
       return false;
     }
@@ -108,7 +109,7 @@ class PixelGridModel {
   bool removeWasteAt(int x, int y) {
     if (x < 0 || x >= width || y < 0 || y >= height) return false;
     if (cells[y][x].kind != CellKind.waste) return false;
-    cells[y][x] = GridCell(color: _emptyColor, kind: CellKind.empty);
+    cells[y][x] = GridCell(color: _emptyColor);
     _bump();
     return true;
   }
@@ -116,7 +117,7 @@ class PixelGridModel {
   /// Place un point de nourriture sur une case vide (intérieur de la grille).
   bool tryPlaceFood(int x, int y) {
     if (x < 0 || x >= width || y < 0 || y >= height) return false;
-    final c = cells[y][x];
+    final GridCell c = cells[y][x];
     if (c.kind != CellKind.empty) return false;
     cells[y][x] = const GridCell(color: foodColor, kind: CellKind.food);
     _bump();
@@ -127,15 +128,15 @@ class PixelGridModel {
   bool collectFoodAt(int x, int y) {
     if (x < 0 || x >= width || y < 0 || y >= height) return false;
     if (cells[y][x].kind != CellKind.food) return false;
-    cells[y][x] = GridCell(color: _emptyColor, kind: CellKind.empty);
+    cells[y][x] = GridCell(color: _emptyColor);
     _bump();
     return true;
   }
 
   int countFood() {
-    var n = 0;
-    for (var y = 1; y < height - 1; y++) {
-      for (var x = 1; x < width - 1; x++) {
+    int n = 0;
+    for (int y = 1; y < height - 1; y++) {
+      for (int x = 1; x < width - 1; x++) {
         if (cells[y][x].kind == CellKind.food) n++;
       }
     }
@@ -144,11 +145,11 @@ class PixelGridModel {
 
   /// Efface toutes les cellules marquées [CellKind.creature] (revient au fond).
   void clearCreatureCells() {
-    for (var y = 0; y < height; y++) {
-      for (var x = 0; x < width; x++) {
-        final c = cells[y][x];
+    for (int y = 0; y < height; y++) {
+      for (int x = 0; x < width; x++) {
+        final GridCell c = cells[y][x];
         if (c.kind == CellKind.creature) {
-          cells[y][x] = GridCell(color: _emptyColor, kind: CellKind.empty);
+          cells[y][x] = GridCell(color: _emptyColor);
         }
       }
     }
@@ -161,23 +162,23 @@ class PixelGridModel {
     int originY,
     List<List<Color>> frame,
   ) {
-    for (var y = 0; y < height; y++) {
-      for (var x = 0; x < width; x++) {
-        final c = cells[y][x];
+    for (int y = 0; y < height; y++) {
+      for (int x = 0; x < width; x++) {
+        final GridCell c = cells[y][x];
         if (c.kind == CellKind.creature) {
-          cells[y][x] = GridCell(color: _emptyColor, kind: CellKind.empty);
+          cells[y][x] = GridCell(color: _emptyColor);
         }
       }
     }
-    for (var fy = 0; fy < frame.length; fy++) {
-      final row = frame[fy];
-      for (var fx = 0; fx < row.length; fx++) {
-        final pixel = row[fx];
+    for (int fy = 0; fy < frame.length; fy++) {
+      final List<Color> row = frame[fy];
+      for (int fx = 0; fx < row.length; fx++) {
+        final Color pixel = row[fx];
         if (pixel.a == 0) continue;
-        final gx = originX + fx;
-        final gy = originY + fy;
+        final int gx = originX + fx;
+        final int gy = originY + fy;
         if (gx >= 0 && gx < width && gy >= 0 && gy < height) {
-          final existing = cells[gy][gx];
+          final GridCell existing = cells[gy][gx];
           if (existing.kind == CellKind.filled) continue;
           if (existing.kind == CellKind.waste) continue;
           if (existing.kind == CellKind.food) continue;

@@ -6,7 +6,7 @@ import 'services/biti_storage.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final restored = await BitiStorage.load();
+  final BitiProfile? restored = await BitiStorage.load();
   runApp(BitiApp(restoredProfile: restored));
 }
 
@@ -18,12 +18,12 @@ class BitiApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const textScale = 1.2;
-    final colorScheme = ColorScheme.fromSeed(
+    const double textScale = 1.2;
+    final ColorScheme colorScheme = ColorScheme.fromSeed(
       seedColor: const Color(0xFF6C5CE7),
       brightness: Brightness.dark,
     );
-    final base = ThemeData(
+    final ThemeData base = ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
       fontFamily: 'Orev',
@@ -45,14 +45,12 @@ class BitiApp extends StatelessWidget {
           displayColor: colorScheme.onPrimary,
         ),
       ),
-      builder: (context, child) {
+      builder: (BuildContext context, Widget? child) {
         if (child == null) return const SizedBox.shrink();
-        final mq = MediaQuery.of(context);
-        final combined = mq.textScaler.scale(1.0) * textScale;
+        final MediaQueryData mq = MediaQuery.of(context);
+        final double combined = mq.textScaler.scale(1.0) * textScale;
         return MediaQuery(
-          data: mq.copyWith(
-            textScaler: TextScaler.linear(combined),
-          ),
+          data: mq.copyWith(textScaler: TextScaler.linear(combined)),
           child: child,
         );
       },

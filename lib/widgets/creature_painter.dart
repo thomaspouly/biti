@@ -29,7 +29,7 @@ class CreaturePainter extends CustomPainter {
 
   static Color _remapPixel(Color c, BitiThemePair t) {
     if (c.a == 0) return c;
-    final lum = c.computeLuminance().clamp(0.0, 1.0);
+    final double lum = c.computeLuminance().clamp(0.0, 1.0);
     return t.mix(0.12 + lum * 0.78);
   }
 
@@ -37,38 +37,38 @@ class CreaturePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (frame.isEmpty) return;
 
-    final cellW = size.width / gridWidth;
-    final cellH = size.height / gridHeight;
-    final padX = cellW * gameBoardCellPaddingRatio;
-    final padY = cellH * gameBoardCellPaddingRatio;
-    final innerW = cellW - 2 * padX;
-    final innerH = cellH - 2 * padY;
+    final double cellW = size.width / gridWidth;
+    final double cellH = size.height / gridHeight;
+    final double padX = cellW * gameBoardCellPaddingRatio;
+    final double padY = cellH * gameBoardCellPaddingRatio;
+    final double innerW = cellW - 2 * padX;
+    final double innerH = cellH - 2 * padY;
 
-    final originX = creatureX * cellW + padX;
-    final originY = creatureY * cellH + padY;
+    final double originX = creatureX * cellW + padX;
+    final double originY = creatureY * cellH + padY;
 
-    final spritePixelW = frame.first.length * innerW;
-    final spritePixelH = frame.length * innerH;
-    final cx = originX + spritePixelW / 2;
-    final cy = originY + spritePixelH / 2;
+    final double spritePixelW = frame.first.length * innerW;
+    final double spritePixelH = frame.length * innerH;
+    final double cx = originX + spritePixelW / 2;
+    final double cy = originY + spritePixelH / 2;
 
     canvas.save();
     canvas.translate(cx, cy);
     canvas.rotate(lean * 0.18 * math.pi);
     canvas.translate(-cx, -cy);
 
-    for (var y = 0; y < frame.length; y++) {
-      final row = frame[y];
-      for (var x = 0; x < row.length; x++) {
-        final color = row[x];
+    for (int y = 0; y < frame.length; y++) {
+      final List<Color> row = frame[y];
+      for (int x = 0; x < row.length; x++) {
+        final Color color = row[x];
         if (color.a == 0) continue;
-        final rect = Rect.fromLTWH(
+        final Rect rect = Rect.fromLTWH(
           originX + x * innerW,
           originY + y * innerH,
           innerW + 0.5,
           innerH + 0.5,
         );
-        final paint = Paint()..color = _remapPixel(color, theme);
+        final Paint paint = Paint()..color = _remapPixel(color, theme);
         canvas.drawRect(rect, paint);
       }
     }

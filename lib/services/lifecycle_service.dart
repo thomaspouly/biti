@@ -9,7 +9,7 @@ import '../models/creature_growth.dart';
 
 String _resolveBitiName(BitiProfile? restored) {
   if (restored == null) return BitiProfile.defaultName;
-  final n = restored.name.trim();
+  final String n = restored.name.trim();
   return n.isEmpty ? BitiProfile.defaultName : n;
 }
 
@@ -20,13 +20,13 @@ class LifecycleService extends ChangeNotifier {
     this.criticalStreakDuration = const Duration(hours: 2),
     this.criticalGaugeThreshold = 20,
     BitiProfile? restored,
-  })  : hunger = (restored?.hunger ?? 75).clamp(0, 100),
-        energy = (restored?.energy ?? 80).clamp(0, 100),
-        mood = (restored?.mood ?? 72).clamp(0, 100),
-        xp = (restored?.xp ?? 0).clamp(0, 1 << 30),
-        name = _resolveBitiName(restored),
-        sleeping = restored?.sleeping ?? false,
-        _dead = restored?.isDead ?? false {
+  }) : hunger = (restored?.hunger ?? 75).clamp(0, 100),
+       energy = (restored?.energy ?? 80).clamp(0, 100),
+       mood = (restored?.mood ?? 72).clamp(0, 100),
+       xp = (restored?.xp ?? 0).clamp(0, 1 << 30),
+       name = _resolveBitiName(restored),
+       sleeping = restored?.sleeping ?? false,
+       _dead = restored?.isDead ?? false {
     if (!_dead) {
       _tick = Timer.periodic(tickInterval, (_) => _onTick());
     }
@@ -80,7 +80,7 @@ class LifecycleService extends ChangeNotifier {
 
   CreatureMood get derivedMood {
     if (_dead) return CreatureMood.idle;
-    final now = DateTime.now();
+    final DateTime now = DateTime.now();
     if (_excitedUntil != null && now.isBefore(_excitedUntil!)) {
       return CreatureMood.excited;
     }
@@ -93,7 +93,7 @@ class LifecycleService extends ChangeNotifier {
   void _checkCriticalStreakAfterUpdate() {
     if (_dead) return;
 
-    final critical =
+    final bool critical =
         hunger < criticalGaugeThreshold ||
         energy < criticalGaugeThreshold ||
         mood < criticalGaugeThreshold;
@@ -134,7 +134,7 @@ class LifecycleService extends ChangeNotifier {
   /// Renommer Biti (persisté via l’écran).
   void setName(String newName) {
     if (_dead) return;
-    final n = newName.trim();
+    final String n = newName.trim();
     if (n.isEmpty) return;
     name = n;
     notifyListeners();

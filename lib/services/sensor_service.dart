@@ -30,15 +30,17 @@ class SensorService {
       samplingPeriod: SensorInterval.gameInterval,
     ).listen(_onUserAccel, onError: (_) {}, cancelOnError: false);
 
-    _gyro = gyroscopeEventStream(
-      samplingPeriod: SensorInterval.normalInterval,
-    ).listen(_onGyro, onError: (_) {}, cancelOnError: false);
+    _gyro = gyroscopeEventStream().listen(
+      _onGyro,
+      onError: (_) {},
+      cancelOnError: false,
+    );
   }
 
   void _onUserAccel(UserAccelerometerEvent e) {
-    final mag = sqrt(e.x * e.x + e.y * e.y + e.z * e.z);
+    final double mag = sqrt(e.x * e.x + e.y * e.y + e.z * e.z);
     if (mag < shakeThreshold) return;
-    final now = DateTime.now();
+    final DateTime now = DateTime.now();
     if (now.difference(_lastShakeAt) < shakeCooldown) return;
     _lastShakeAt = now;
     onShake();
@@ -46,7 +48,7 @@ class SensorService {
 
   void _onGyro(GyroscopeEvent e) {
     // Légère réaction visuelle : combine les axes pour un penché ressenti.
-    final lean = (e.y * 0.08 + e.x * 0.04).clamp(-1.0, 1.0);
+    final double lean = (e.y * 0.08 + e.x * 0.04).clamp(-1.0, 1.0);
     onTilt(lean);
   }
 

@@ -14,11 +14,11 @@ class BitiStorage {
   static const String _themePresetKey = 'biti_theme_preset_v1';
 
   static Future<BitiProfile?> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_profileKey);
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final String? raw = prefs.getString(_profileKey);
     if (raw == null || raw.isEmpty) return null;
     try {
-      final map = jsonDecode(raw) as Map<String, dynamic>;
+      final Map<String, dynamic> map = jsonDecode(raw) as Map<String, dynamic>;
       return BitiProfile.fromJson(map);
     } on Object {
       return null;
@@ -26,7 +26,7 @@ class BitiStorage {
   }
 
   static Future<void> save(BitiProfile profile) async {
-    final prefs = await SharedPreferences.getInstance();
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.setString(_profileKey, jsonEncode(profile.toJson()));
   }
 
@@ -36,8 +36,8 @@ class BitiStorage {
 
   /// Index 0…4 dans [BitiThemePair.presets].
   static Future<int> loadThemePresetIndex() async {
-    final prefs = await SharedPreferences.getInstance();
-    final i = prefs.getInt(_themePresetKey);
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final int? i = prefs.getInt(_themePresetKey);
     if (i == null || i < 0 || i >= BitiThemePair.presets.length) {
       return 0;
     }
@@ -45,8 +45,8 @@ class BitiStorage {
   }
 
   static Future<void> saveThemePresetIndex(int index) async {
-    final prefs = await SharedPreferences.getInstance();
-    final clamped = index.clamp(0, BitiThemePair.presets.length - 1);
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final int clamped = index.clamp(0, BitiThemePair.presets.length - 1);
     await prefs.setInt(_themePresetKey, clamped);
   }
 }
