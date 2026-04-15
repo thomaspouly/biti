@@ -187,7 +187,7 @@ class _SelectedBitiOutline extends StatelessWidget {
   final double cellW;
   final double cellH;
 
-  static const Color _outline = Color(0xFFE53935);
+  static const Color _outline = Color.fromARGB(255, 202, 0, 0);
 
   @override
   Widget build(BuildContext context) {
@@ -199,18 +199,24 @@ class _SelectedBitiOutline extends StatelessWidget {
     final double top = creature.gridY * cellH + padY;
     final double w = creature.spriteWidth * innerW;
     final double h = creature.spriteHeight * innerH;
-    final double r = (math.min(w, h) * 0.14).clamp(2.0, 8.0);
+
+    /// Espace entre le sprite et le trait rouge (px écran).
+    final double gap = (math.min(cellW, cellH) * 0.3).clamp(2.0, 5.0);
+    const double borderWidth = 1.5;
+    final double boxW = w + 2 * gap;
+    final double boxH = h + 2 * gap;
+    final double r = (math.min(boxW, boxH) * 0.14).clamp(2.0, 8.0);
     return Positioned(
-      left: left - 1.5,
-      top: top - 1.5,
-      width: w + 3,
-      height: h + 3,
+      left: left - gap,
+      top: top - gap,
+      width: boxW,
+      height: boxH,
       child: IgnorePointer(
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: Colors.transparent,
             borderRadius: BorderRadius.circular(r),
-            border: Border.all(color: _outline, width: 2.25),
+            border: Border.all(color: _outline, width: borderWidth),
           ),
         ),
       ),
@@ -235,8 +241,7 @@ class _BoardBitiNameLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double cx =
-        (creature.gridX + creature.spriteWidth * 0.5) * cellW;
+    final double cx = (creature.gridX + creature.spriteWidth * 0.5) * cellW;
     final double top = (creature.gridY + creature.spriteHeight) * cellH + 1;
     final double fontSize = (cellH * 0.26).clamp(7.0, 10.5);
     return Positioned(
