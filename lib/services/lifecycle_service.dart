@@ -131,6 +131,15 @@ class LifecycleService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Renommer Biti (persisté via l’écran).
+  void setName(String newName) {
+    if (_dead) return;
+    final n = newName.trim();
+    if (n.isEmpty) return;
+    name = n;
+    notifyListeners();
+  }
+
   /// Nourrir : remonte la faim et l’humeur légèrement.
   void feed() {
     if (_dead) return;

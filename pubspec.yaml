@@ -59,6 +59,21 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
+  fonts:
+    - family: Orev
+      fonts:
+        - asset: fonts/Orev-Regular.ttf
+        - asset: fonts/Orev-Italic.ttf
+          style: italic
+        - asset: fonts/Orev-Light.ttf
+          weight: 300
+        - asset: fonts/Orev-Medium.ttf
+          weight: 500
+        - asset: fonts/Orev-Bold.ttf
+          weight: 700
+        - asset: fonts/Orev-Black.ttf
+          weight: 900
+
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

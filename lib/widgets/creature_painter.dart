@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 
 import '../models/creature.dart';
 import '../models/grid.dart';
+import '../theme/biti_theme_pair.dart';
 
 /// Dessine la frame courante du sprite avec un léger penché ([Creature.lean]).
+/// Couleurs uniquement sur le segment [theme.a] → [theme.b].
 class CreaturePainter extends CustomPainter {
   CreaturePainter({
     required this.frame,
@@ -14,6 +16,7 @@ class CreaturePainter extends CustomPainter {
     required this.creatureX,
     required this.creatureY,
     required this.lean,
+    required this.theme,
   });
 
   final List<List<Color>> frame;
@@ -22,6 +25,13 @@ class CreaturePainter extends CustomPainter {
   final int creatureX;
   final int creatureY;
   final double lean;
+  final BitiThemePair theme;
+
+  static Color _remapPixel(Color c, BitiThemePair t) {
+    if (c.a == 0) return c;
+    final lum = c.computeLuminance().clamp(0.0, 1.0);
+    return t.mix(0.12 + lum * 0.78);
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -58,7 +68,7 @@ class CreaturePainter extends CustomPainter {
           innerW + 0.5,
           innerH + 0.5,
         );
-        final paint = Paint()..color = color;
+        final paint = Paint()..color = _remapPixel(color, theme);
         canvas.drawRect(rect, paint);
       }
     }
@@ -73,6 +83,7 @@ class CreaturePainter extends CustomPainter {
         oldDelegate.creatureY != creatureY ||
         oldDelegate.lean != lean ||
         oldDelegate.gridWidth != gridWidth ||
-        oldDelegate.gridHeight != gridHeight;
+        oldDelegate.gridHeight != gridHeight ||
+        oldDelegate.theme != theme;
   }
 }

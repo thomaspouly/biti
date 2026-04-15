@@ -18,18 +18,44 @@ class BitiApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const textScale = 1.2;
+    final colorScheme = ColorScheme.fromSeed(
+      seedColor: const Color(0xFF6C5CE7),
+      brightness: Brightness.dark,
+    );
+    final base = ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.dark,
+      fontFamily: 'Orev',
+      colorScheme: colorScheme,
+      scaffoldBackgroundColor: const Color(0xFF0B0E14),
+    );
     return MaterialApp(
       title: 'Biti',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.dark,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6C5CE7),
-          brightness: Brightness.dark,
+      theme: base.copyWith(
+        textTheme: base.textTheme.apply(
+          fontFamily: 'Orev',
+          bodyColor: colorScheme.onSurface,
+          displayColor: colorScheme.onSurface,
         ),
-        scaffoldBackgroundColor: const Color(0xFF0B0E14),
+        primaryTextTheme: base.primaryTextTheme.apply(
+          fontFamily: 'Orev',
+          bodyColor: colorScheme.onPrimary,
+          displayColor: colorScheme.onPrimary,
+        ),
       ),
+      builder: (context, child) {
+        if (child == null) return const SizedBox.shrink();
+        final mq = MediaQuery.of(context);
+        final combined = mq.textScaler.scale(1.0) * textScale;
+        return MediaQuery(
+          data: mq.copyWith(
+            textScaler: TextScaler.linear(combined),
+          ),
+          child: child,
+        );
+      },
       home: HomeScreen(restoredProfile: restoredProfile),
     );
   }

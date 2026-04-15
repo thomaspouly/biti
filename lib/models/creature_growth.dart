@@ -35,6 +35,13 @@ class CreatureGrowth {
     return spans[level.clamp(1, 6) - 1];
   }
 
+  /// Taille du **terrain** (carré) en nombre de cases selon le niveau **1–6**.
+  /// Niveau **1** : 30×30, puis **+4** cases par niveau (50×50 au niveau 6).
+  static int terrainSideForLevel(int level) {
+    const sides = [30, 34, 38, 42, 46, 50];
+    return sides[level.clamp(1, 6) - 1];
+  }
+
   /// Remplissage **0.0–1.0** du segment XP jusqu’au **prochain** niveau.
   /// Au niveau **6**, retourne **1.0**.
   static double levelFillProgressFromXp(int xp) {

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../models/creature.dart';
 import '../models/grid.dart';
+import '../theme/biti_theme_pair.dart';
 import 'creature_painter.dart';
 
 /// Rayon de recherche en cases autour du tap.
@@ -68,6 +69,7 @@ class PixelGrid extends StatelessWidget {
     required this.mood,
     required this.lean,
     required this.growthLevel,
+    required this.theme,
     this.onCellTap,
   });
 
@@ -78,6 +80,9 @@ class PixelGrid extends StatelessWidget {
 
   /// Niveau de croissance 1–6 ([CreatureGrowth]).
   final int growthLevel;
+
+  /// Couleurs du terrain : uniquement des points sur le segment thème.
+  final BitiThemePair theme;
 
   /// Coordonnées grille : excrément, nourriture, etc.
   final void Function(int gridX, int gridY)? onCellTap;
@@ -90,64 +95,55 @@ class PixelGrid extends StatelessWidget {
       growthLevel,
     );
 
-    return AspectRatio(
-      aspectRatio: 1,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final side = constraints.biggest.shortestSide;
-          final cellW = side / model.width;
-          final cellH = side / model.height;
-          return SizedBox(
-            width: side,
-            height: side,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                CustomPaint(
-                  painter: PixelGridPainter(model: model),
-                  size: Size.square(side),
-                ),
-                CustomPaint(
-                  painter: CreaturePainter(
-                    frame: frame,
-                    gridWidth: model.width,
-                    gridHeight: model.height,
-                    creatureX: creature.gridX,
-                    creatureY: creature.gridY,
-                    lean: lean,
-                  ),
-                  size: Size.square(side),
-                ),
-                if (onCellTap != null)
-                  Positioned.fill(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.translucent,
-                      onTapUp: (details) {
-                        final p = details.localPosition;
-                        final t = _tapCellWithSlop(
-                          model,
-                          p.dx,
-                          p.dy,
-                          cellW,
-                          cellH,
-                        );
-                        onCellTap!(t.$1, t.$2);
-                      },
-                    ),
-                  ),
-              ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final height = constraints.maxHeight;
+        final cellW = width / model.width;
+        final cellH = height / model.height;
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            CustomPaint(
+              painter: PixelGridPainter(model: model, theme: theme),
             ),
-          );
-        },
-      ),
+            CustomPaint(
+              painter: CreaturePainter(
+                frame: frame,
+                gridWidth: model.width,
+                gridHeight: model.height,
+                creatureX: creature.gridX,
+                creatureY: creature.gridY,
+                lean: lean,
+                theme: theme,
+              ),
+            ),
+            if (onCellTap != null)
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onTapUp: (details) {
+                    final p = details.localPosition;
+                    final t = _tapCellWithSlop(model, p.dx, p.dy, cellW, cellH);
+                    onCellTap!(t.$1, t.$2);
+                  },
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }
 
 class PixelGridPainter extends CustomPainter {
-  PixelGridPainter({required this.model});
+  PixelGridPainter({required this.model, required this.theme});
 
   final PixelGridModel model;
+  final BitiThemePair theme;
+
+  /// Fond uniforme du terrain (un peu plus foncé sur le segment thème).
+  Color get _terrainBase => theme.mix(0.0);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -156,63 +152,42 @@ class PixelGridPainter extends CustomPainter {
     final cellW = size.width / w;
     final cellH = size.height / h;
 
-    const baseEmpty = Color(0xFF16213E);
-    const altEmpty = Color(0xFF1A1A2E);
-    const grout = Color(0xFF0C1018);
-
     final padX = cellW * gameBoardCellPaddingRatio;
     final padY = cellH * gameBoardCellPaddingRatio;
 
     for (var y = 0; y < h; y++) {
       for (var x = 0; x < w; x++) {
         final cell = model.cellAt(x, y);
-        final full = Rect.fromLTWH(
-          x * cellW,
-          y * cellH,
-          cellW + 0.5,
-          cellH + 0.5,
-        );
-        final inner = Rect.fromLTWH(
+        final rCell = Rect.fromLTWH(
           x * cellW + padX,
           y * cellH + padY,
-          cellW - 2 * padX,
-          cellH - 2 * padY,
+          cellW - 2 * padX + 0.5,
+          cellH - 2 * padY + 0.5,
         );
+        final corner = Radius.circular(
+          (math.min(rCell.width, rCell.height) * 0.3).clamp(0.6, 5.0),
+        );
+        final rRCell = RRect.fromRectAndRadius(rCell, corner);
         final paint = Paint();
 
-        canvas.drawRect(full, paint..color = grout);
-
-        if (cell.kind == CellKind.creature) {
-          // Le sprite animé + penché est dessiné par [CreaturePainter].
-          final alt = (x + y).isEven;
-          paint.color = Color.lerp(baseEmpty, altEmpty, alt ? 0.12 : 0) ?? baseEmpty;
-          canvas.drawRect(inner, paint);
-        } else if (cell.kind == CellKind.empty) {
-          final alt = (x + y).isEven;
-          paint.color = Color.lerp(
-                cell.color,
-                altEmpty,
-                alt ? 0.12 : 0,
-              ) ??
-              cell.color;
-          canvas.drawRect(inner, paint);
-        } else if (cell.kind == CellKind.waste) {
-          final alt = (x + y).isEven;
-          paint.color = Color.lerp(baseEmpty, altEmpty, alt ? 0.12 : 0) ?? baseEmpty;
-          canvas.drawRect(inner, paint);
-          paint.color = cell.color;
-          final r = math.min(inner.width, inner.height) * 0.38;
-          canvas.drawCircle(inner.center, r, paint);
+        if (cell.kind == CellKind.waste) {
+          paint.color = _terrainBase;
+          canvas.drawRRect(rRCell, paint);
+          paint.color = theme.mix(0.8);
+          final r = math.min(rCell.width, rCell.height) * 0.38;
+          canvas.drawCircle(rCell.center, r, paint);
         } else if (cell.kind == CellKind.food) {
-          final alt = (x + y).isEven;
-          paint.color = Color.lerp(baseEmpty, altEmpty, alt ? 0.12 : 0) ?? baseEmpty;
-          canvas.drawRect(inner, paint);
-          paint.color = cell.color;
-          final r = math.min(inner.width, inner.height) * 0.38;
-          canvas.drawCircle(inner.center, r, paint);
+          paint.color = _terrainBase;
+          canvas.drawRRect(rRCell, paint);
+          paint.color = theme.mix(0.36);
+          final r = math.min(rCell.width, rCell.height) * 0.38;
+          canvas.drawCircle(rCell.center, r, paint);
+        } else if (cell.kind == CellKind.filled) {
+          paint.color = theme.mix(0.88);
+          canvas.drawRRect(rRCell, paint);
         } else {
-          paint.color = cell.color;
-          canvas.drawRect(inner, paint);
+          paint.color = _terrainBase;
+          canvas.drawRRect(rRCell, paint);
         }
       }
     }
@@ -220,6 +195,7 @@ class PixelGridPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant PixelGridPainter oldDelegate) {
-    return oldDelegate.model.paintEpoch != model.paintEpoch;
+    return oldDelegate.model.paintEpoch != model.paintEpoch ||
+        oldDelegate.theme != theme;
   }
 }

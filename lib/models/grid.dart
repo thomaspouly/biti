@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-/// Fraction du côté de case laissée vide (« joint ») autour du carreau dessiné (10 % de chaque côté → cœur 80 %).
-const double gameBoardCellPaddingRatio = 0.03;
+/// Fraction du côté de case laissée vide autour du carreau (ex. `0.07` = **7 %** de chaque côté).
+const double gameBoardCellPaddingRatio = 0.07;
 
 /// État logique d'une cellule dans le monde grille.
 enum CellKind {
@@ -43,22 +43,17 @@ class PixelGridModel {
     required this.width,
     required this.height,
     Color emptyColor = const Color(0xFF16213E),
-    Color borderColor = const Color(0xFF0F3460),
   }) : _emptyColor = emptyColor,
-       _borderColor = borderColor,
        cells = List.generate(
          height,
          (_) => List<GridCell>.filled(width, GridCell(color: emptyColor)),
-       ) {
-    _applyBorder();
-  }
+       );
 
   final int width;
   final int height;
   final List<List<GridCell>> cells;
 
   final Color _emptyColor;
-  final Color _borderColor;
 
   /// Marron excrément (visible sur la grille).
   static const Color wasteColor = Color(0xFF5D4037);
@@ -73,23 +68,6 @@ class PixelGridModel {
   int paintEpoch = 0;
 
   void _bump() => paintEpoch++;
-
-  void _applyBorder() {
-    for (var x = 0; x < width; x++) {
-      cells[0][x] = GridCell(color: _borderColor, kind: CellKind.filled);
-      cells[height - 1][x] = GridCell(
-        color: _borderColor,
-        kind: CellKind.filled,
-      );
-    }
-    for (var y = 0; y < height; y++) {
-      cells[y][0] = GridCell(color: _borderColor, kind: CellKind.filled);
-      cells[y][width - 1] = GridCell(
-        color: _borderColor,
-        kind: CellKind.filled,
-      );
-    }
-  }
 
   GridCell cellAt(int x, int y) {
     if (x < 0 || x >= width || y < 0 || y >= height) {
@@ -118,7 +96,9 @@ class PixelGridModel {
     if (countWaste() >= maxWastePieces) return false;
     if (x < 0 || x >= width || y < 0 || y >= height) return false;
     final c = cells[y][x];
-    if (c.kind != CellKind.empty) return false;
+    if (c.kind != CellKind.empty && c.kind != CellKind.creature) {
+      return false;
+    }
     cells[y][x] = const GridCell(color: wasteColor, kind: CellKind.waste);
     _bump();
     return true;
