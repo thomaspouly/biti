@@ -419,7 +419,7 @@ class _HomeScreenState extends State<HomeScreen>
                     Padding(
                       padding: const EdgeInsets.symmetric(
                         vertical: 12,
-                        horizontal: 2,
+                        horizontal: 7,
                       ),
                       child: LayoutBuilder(
                         builder:
