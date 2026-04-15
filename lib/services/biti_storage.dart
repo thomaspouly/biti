@@ -17,10 +17,39 @@ class BitiStorage {
   static const String _themePresetKey = 'biti_theme_preset_v1';
   static const String _legacyAutostartKey = 'biti_legacy_autostart_v1';
 
+  /// Id du profil [BitiProfile.id] du Biti principal (créé avec l’app / premier de la liste migré).
+  static const String _mainBitiProfileIdKey = 'biti_main_profile_id_v1';
+
+  /// Id du Biti « principal » persisté ; `null` si aucune collection chargée encore.
+  static Future<String?> mainBitiProfileId() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final String? raw = prefs.getString(_mainBitiProfileIdKey);
+    if (raw == null) return null;
+    final String t = raw.trim();
+    return t.isEmpty ? null : t;
+  }
+
+  /// Assure une entrée prefs cohérente avec [c] (premier profil si besoin).
+  static Future<void> _ensureMainBitiProfileIdAfterLoad(
+    BitiCollection c,
+  ) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    if (c.profiles.isEmpty) {
+      await prefs.remove(_mainBitiProfileIdKey);
+      return;
+    }
+    final String? existing = prefs.getString(_mainBitiProfileIdKey)?.trim();
+    final bool valid =
+        existing != null &&
+        existing.isNotEmpty &&
+        c.profiles.any((BitiProfile p) => p.id == existing);
+    if (valid) return;
+    await prefs.setString(_mainBitiProfileIdKey, c.profiles.first.id);
+  }
+
   static BitiProfile? _decodeProfile(String raw) {
     try {
-      final Map<String, dynamic> map =
-          jsonDecode(raw) as Map<String, dynamic>;
+      final Map<String, dynamic> map = jsonDecode(raw) as Map<String, dynamic>;
       return BitiProfile.fromJson(map);
     } on Object {
       return null;
@@ -35,7 +64,9 @@ class BitiStorage {
       try {
         final Map<String, dynamic> map =
             jsonDecode(raw) as Map<String, dynamic>;
-        return BitiCollection.fromJson(map);
+        final BitiCollection loaded = BitiCollection.fromJson(map);
+        await _ensureMainBitiProfileIdAfterLoad(loaded);
+        return loaded;
       } on Object {
         /* fallback migration */
       }
@@ -53,6 +84,7 @@ class BitiStorage {
       await saveCollection(migrated);
       await prefs.remove(_profileKeyV1);
       await prefs.remove(_guestKeyV1);
+      await _ensureMainBitiProfileIdAfterLoad(migrated);
       return migrated;
     }
 
@@ -77,10 +109,13 @@ class BitiStorage {
         selectedId: seed.id,
       );
       await saveCollection(first);
+      await _ensureMainBitiProfileIdAfterLoad(first);
       return first;
     }
 
-    return const BitiCollection(profiles: <BitiProfile>[]);
+    const BitiCollection empty = BitiCollection(profiles: <BitiProfile>[]);
+    await _ensureMainBitiProfileIdAfterLoad(empty);
+    return empty;
   }
 
   static BitiProfile? _readV1Primary(SharedPreferences prefs) {
@@ -97,10 +132,7 @@ class BitiStorage {
 
   static Future<void> saveCollection(BitiCollection collection) async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      _collectionKey,
-      jsonEncode(collection.toJson()),
-    );
+    await prefs.setString(_collectionKey, jsonEncode(collection.toJson()));
   }
 
   /// Fusionne les stats du cycle de vie dans le profil [base] puis enregistre.
@@ -165,16 +197,26 @@ class BitiStorage {
 
   /// Après envoi réussi : retire ce profil de la liste.
   static Future<void> removeProfileById(String id) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final String? mainId = prefs.getString(_mainBitiProfileIdKey)?.trim();
     final BitiCollection c = await loadCollection();
     final List<BitiProfile> list = <BitiProfile>[
       for (final BitiProfile p in c.profiles)
         if (p.id != id) p,
     ];
     String? newSel = c.selectedId;
-    if (newSel == id || (newSel != null && !list.any((BitiProfile p) => p.id == newSel))) {
+    if (newSel == id ||
+        (newSel != null && !list.any((BitiProfile p) => p.id == newSel))) {
       newSel = list.isEmpty ? null : list.first.id;
     }
     await saveCollection(BitiCollection(profiles: list, selectedId: newSel));
+    if (mainId == id) {
+      if (list.isEmpty) {
+        await prefs.remove(_mainBitiProfileIdKey);
+      } else {
+        await prefs.setString(_mainBitiProfileIdKey, list.first.id);
+      }
+    }
   }
 
   static Future<void> clearAllProfiles() async {
@@ -182,6 +224,7 @@ class BitiStorage {
     await prefs.remove(_collectionKey);
     await prefs.remove(_profileKeyV1);
     await prefs.remove(_guestKeyV1);
+    await prefs.remove(_mainBitiProfileIdKey);
   }
 
   /// Met à jour l’apparence / meta sans toucher aux stats (ex. thème depuis les réglages).

@@ -10,7 +10,7 @@ import 'creature_painter.dart';
 /// Rayon de recherche en cases autour du tap.
 const int _tapSearchRadiusCells = 4;
 
-/// Au-delà de cette distance (× taille de case), on ne « colle » pas au caca / nourriture.
+/// Au-delà de cette distance (× taille de case), on ne « colle » pas à la nourriture.
 const double _tapSlopInCellUnits = 1.9;
 
 /// Données pour afficher un Biti sur le plateau (plusieurs instances possibles).
@@ -63,7 +63,7 @@ class PixelGridBoardBiti {
       final int gy = gy0 + dy;
       if (gx < 0 || gx >= w || gy < 0 || gy >= h) continue;
       final CellKind kind = model.cellAt(gx, gy).kind;
-      if (kind != CellKind.waste && kind != CellKind.food) continue;
+      if (kind != CellKind.food) continue;
 
       final double cx = (gx + 0.5) * cellW;
       final double cy = (gy + 0.5) * cellH;
@@ -298,13 +298,7 @@ class PixelGridPainter extends CustomPainter {
         final RRect rRCell = RRect.fromRectAndRadius(rCell, corner);
         final Paint paint = Paint();
 
-        if (cell.kind == CellKind.waste) {
-          paint.color = _terrainBase;
-          canvas.drawRRect(rRCell, paint);
-          paint.color = theme.mix(0.8);
-          final double r = math.min(rCell.width, rCell.height) * 0.38;
-          canvas.drawCircle(rCell.center, r, paint);
-        } else if (cell.kind == CellKind.food) {
+        if (cell.kind == CellKind.food) {
           paint.color = _terrainBase;
           canvas.drawRRect(rRCell, paint);
           paint.color = theme.mix(0.36);

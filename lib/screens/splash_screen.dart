@@ -30,8 +30,7 @@ class _SplashScreenState extends State<SplashScreen> {
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(
-        builder: (_) =>
-            HomeScreen(initialCollection: widget.initialCollection),
+        builder: (_) => HomeScreen(initialCollection: widget.initialCollection),
       ),
     );
   }

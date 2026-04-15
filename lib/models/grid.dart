@@ -14,9 +14,6 @@ enum CellKind {
   /// Occupée par un pixel de la créature (synchronisé avec le sprite).
   creature,
 
-  /// Excrément (pixel marron) ; nettoyé par tap.
-  waste,
-
   /// Nourriture (point vert) ; récolte au tap.
   food,
 }
@@ -55,12 +52,6 @@ class PixelGridModel {
 
   final Color _emptyColor;
 
-  /// Marron excrément (visible sur la grille).
-  static const Color wasteColor = Color(0xFF5D4037);
-
-  /// Nombre max de pixels d’excrément sur la grille à la fois.
-  static const int maxWastePieces = 20;
-
   /// Vert nourriture (pastille).
   static const Color foodColor = Color(0xFF00B894);
 
@@ -79,39 +70,6 @@ class PixelGridModel {
   void setCell(int x, int y, GridCell cell) {
     if (x < 0 || x >= width || y < 0 || y >= height) return;
     cells[y][x] = cell;
-  }
-
-  int countWaste() {
-    int n = 0;
-    // ignore: always_specify_types
-    for (var y = 1; y < height - 1; y++) {
-      for (int x = 1; x < width - 1; x++) {
-        if (cells[y][x].kind == CellKind.waste) n++;
-      }
-    }
-    return n;
-  }
-
-  /// Place un pixel d’excrément si la case est libre (pas bordure, pas créature).
-  bool tryPlaceWaste(int x, int y) {
-    if (countWaste() >= maxWastePieces) return false;
-    if (x < 0 || x >= width || y < 0 || y >= height) return false;
-    final GridCell c = cells[y][x];
-    if (c.kind != CellKind.empty && c.kind != CellKind.creature) {
-      return false;
-    }
-    cells[y][x] = const GridCell(color: wasteColor, kind: CellKind.waste);
-    _bump();
-    return true;
-  }
-
-  /// Retire l’excrément à cette case ; retourne vrai si une case a été nettoyée.
-  bool removeWasteAt(int x, int y) {
-    if (x < 0 || x >= width || y < 0 || y >= height) return false;
-    if (cells[y][x].kind != CellKind.waste) return false;
-    cells[y][x] = GridCell(color: _emptyColor);
-    _bump();
-    return true;
   }
 
   /// Place un point de nourriture sur une case vide (intérieur de la grille).
@@ -171,7 +129,6 @@ class PixelGridModel {
         if (gx >= 0 && gx < width && gy >= 0 && gy < height) {
           final GridCell existing = cells[gy][gx];
           if (existing.kind == CellKind.filled) continue;
-          if (existing.kind == CellKind.waste) continue;
           if (existing.kind == CellKind.food) continue;
           cells[gy][gx] = GridCell(color: pixel, kind: CellKind.creature);
         }

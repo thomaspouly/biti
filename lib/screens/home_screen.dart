@@ -76,7 +76,21 @@ class _HomeScreenState extends State<HomeScreen>
 
   int _lastGrowthLevel = 1;
 
+  /// [BitiProfile.id] du Biti principal (prefs), pour le badge dans l’espace info.
+  String? _mainBitiProfileId;
+
   BitiProfile? get _selected => _collection.selected;
+
+  bool get _selectedIsMainBiti =>
+      _mainBitiProfileId != null &&
+      _selected != null &&
+      _selected!.id == _mainBitiProfileId;
+
+  Future<void> _refreshMainBitiProfileId() async {
+    final String? id = await BitiStorage.mainBitiProfileId();
+    if (!mounted) return;
+    setState(() => _mainBitiProfileId = id);
+  }
 
   Creature get _selectedCreature => _creaturesById[_selected!.id]!;
 
@@ -308,7 +322,6 @@ class _HomeScreenState extends State<HomeScreen>
       setState(() {
         _randomStep();
         _syncGrid();
-        _tryDropWaste();
       });
     });
 
@@ -326,6 +339,7 @@ class _HomeScreenState extends State<HomeScreen>
         }
       });
     });
+    unawaited(_refreshMainBitiProfileId());
   }
 
   Future<void> _switchToProfile(String id) async {
@@ -343,6 +357,7 @@ class _HomeScreenState extends State<HomeScreen>
       _lifecycle!.applyFromProfile(next);
       _reanchorCreatureForGrowth();
     });
+    unawaited(_refreshMainBitiProfileId());
   }
 
   Future<void> _addBitiAndSelect() async {
@@ -359,6 +374,7 @@ class _HomeScreenState extends State<HomeScreen>
         _lifecycle!.applyFromProfile(c.selected!);
         _reanchorCreatureForGrowth();
       });
+      unawaited(_refreshMainBitiProfileId());
     } else {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute<void>(
@@ -601,21 +617,6 @@ class _HomeScreenState extends State<HomeScreen>
     c.clampToGrid(_grid.width, _grid.height);
   }
 
-  /// Chance d’ajouter un pixel marron **uniquement** à la case du **centre** du
-  /// sprite (milieu de la boîte grille), après un déplacement.
-  void _tryDropWaste() {
-    if (!_petMode || _lifecycle == null || _lifecycle!.sleeping) return;
-    final double jitter = 0.45 + Random().nextDouble() * 1.1;
-    if (Random().nextDouble() > 0.38 / 15 * jitter) return;
-
-    final Creature c = _selectedCreature;
-    final int w = c.spriteWidth;
-    final int h = c.spriteHeight;
-    final int cx = c.gridX + (w - 1) ~/ 2;
-    final int cy = c.gridY + (h - 1) ~/ 2;
-    _grid.tryPlaceWaste(cx, cy);
-  }
-
   void _trySpawnFood() {
     if (!_petMode || _lifecycle == null || _lifecycle!.sleeping) return;
     if (_grid.countFood() >= _maxFoodDots) return;
@@ -632,11 +633,6 @@ class _HomeScreenState extends State<HomeScreen>
 
   void _onCellTap(int gx, int gy) {
     if (!_petMode || _lifecycle == null || _lifecycle!.isDead) return;
-    if (_grid.removeWasteAt(gx, gy)) {
-      _lifecycle!.collectWasteCleanup();
-      HapticFeedback.lightImpact();
-      return;
-    }
     if (_grid.collectFoodAt(gx, gy)) {
       _lifecycle!.collectFoodMorsel();
       HapticFeedback.mediumImpact();
@@ -712,6 +708,7 @@ class _HomeScreenState extends State<HomeScreen>
           automaticallyImplyLeading: false,
         ),
         body: SafeArea(
+          top: false,
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Column(
@@ -782,6 +779,7 @@ class _HomeScreenState extends State<HomeScreen>
           automaticallyImplyLeading: false,
         ),
         body: SafeArea(
+          top: false,
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Center(
@@ -850,6 +848,7 @@ class _HomeScreenState extends State<HomeScreen>
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: SafeArea(
+          top: false,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
@@ -859,10 +858,7 @@ class _HomeScreenState extends State<HomeScreen>
                   children: <Widget>[
                     Expanded(
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 7,
-                          vertical: 8,
-                        ),
+                        padding: const EdgeInsets.fromLTRB(7, 0, 7, 8),
                         child: LayoutBuilder(
                           builder:
                               (
@@ -978,19 +974,35 @@ class _HomeScreenState extends State<HomeScreen>
                                 children: <Widget>[
                                   Padding(
                                     padding: const EdgeInsets.only(right: 40),
-                                    child: Text(
-                                      life.name.toUpperCase(),
-                                      textAlign: TextAlign.center,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .headlineSmall
-                                          ?.copyWith(
-                                            color: fg,
-                                            fontWeight: FontWeight.w700,
-                                            letterSpacing: 0.4,
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: <Widget>[
+                                        if (_selectedIsMainBiti) ...<Widget>[
+                                          Icon(
+                                            Icons.home_rounded,
+                                            size: 22,
+                                            color: fg.withValues(alpha: 0.92),
                                           ),
+                                          const SizedBox(width: 8),
+                                        ],
+                                        Flexible(
+                                          child: Text(
+                                            life.name.toUpperCase(),
+                                            textAlign: TextAlign.center,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .headlineSmall
+                                                ?.copyWith(
+                                                  color: fg,
+                                                  fontWeight: FontWeight.w700,
+                                                  letterSpacing: 0.4,
+                                                ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                   const SizedBox(height: 14),
@@ -1098,7 +1110,6 @@ class _HomeScreenState extends State<HomeScreen>
                         foreground: fg,
                         onPlay: life.play,
                         onSleep: life.sleep,
-                        onTransfer: () => _showBitiTransferSheet(context),
                         onSettings: () => _showSettings(context),
                         sleeping: life.sleeping,
                       ),
@@ -1116,7 +1127,7 @@ class _HomeScreenState extends State<HomeScreen>
   double _actionButtonSide(BuildContext context) {
     final double w = MediaQuery.sizeOf(context).width - 32;
     const double gap = 8.0;
-    final double raw = (w - 3 * gap) / 4;
+    final double raw = (w - 2 * gap) / 3;
     return raw.clamp(52, 76);
   }
 
@@ -1151,8 +1162,6 @@ class _HomeScreenState extends State<HomeScreen>
             'plus le rythme ralentit.\n\n'
             'Sur le **terrain** : pince avec deux doigts pour zoomer (jusqu’à ×4), '
             'glisse pour te déplacer quand tu es zoomé.\n\n'
-            'Des pixels marron peuvent apparaître **au centre de Biti** : appuie '
-            'dessus pour nettoyer (+${CreatureGrowth.xpPerWasteCleanup} XP).\n\n'
             'Les points verts sont de la nourriture : appuie dessus pour la '
             'récolter (ça remonte un peu la faim et donne +${CreatureGrowth.xpPerFoodAction} XP).\n\n'
             'La **taille** de Biti suit des **niveaux** selon l’XP : +${CreatureGrowth.xpPerSecondWhenAlive} '
@@ -1191,6 +1200,7 @@ class _HomeScreenState extends State<HomeScreen>
       ),
       builder: (BuildContext ctx) => _BitiSettingsSheet(
         profile: sel,
+        isMainBiti: _selectedIsMainBiti,
         lifecycle: _lifecycle!,
         onSpriteColorsSelected: (int a, int b) {
           final BitiProfile? cur = _selected;
@@ -1204,7 +1214,10 @@ class _HomeScreenState extends State<HomeScreen>
             await BitiStorage.upsertProfile(u);
             if (!mounted) return;
             final BitiCollection c = await BitiStorage.loadCollection();
-            if (mounted) setState(() => _collection = c);
+            if (mounted) {
+              setState(() => _collection = c);
+              unawaited(_refreshMainBitiProfileId());
+            }
           }());
         },
         onShowHelp: () {
@@ -1280,6 +1293,7 @@ class _HomeScreenState extends State<HomeScreen>
                 }
                 _syncGrid();
               });
+              unawaited(_refreshMainBitiProfileId());
               final BitiProfile? s = _collection.selected;
               if (s != null && _lifecycle != null) {
                 unawaited(BitiStorage.saveLifecycleIntoProfile(_lifecycle!, s));
@@ -1402,7 +1416,7 @@ class _LevelGaugeColumn extends StatelessWidget {
   }
 }
 
-/// Barre d’actions carrées (Jouer, Dormir, Échange, Paramètres).
+/// Barre d’actions carrées (Jouer, Dormir, Paramètres).
 class _BitiActionBar extends StatelessWidget {
   const _BitiActionBar({
     required this.buttonSide,
@@ -1410,7 +1424,6 @@ class _BitiActionBar extends StatelessWidget {
     required this.foreground,
     required this.onPlay,
     required this.onSleep,
-    required this.onTransfer,
     required this.onSettings,
     required this.sleeping,
   });
@@ -1420,7 +1433,6 @@ class _BitiActionBar extends StatelessWidget {
   final Color foreground;
   final VoidCallback onPlay;
   final VoidCallback onSleep;
-  final VoidCallback onTransfer;
   final VoidCallback onSettings;
   final bool sleeping;
 
@@ -1434,7 +1446,7 @@ class _BitiActionBar extends StatelessWidget {
           size: buttonSide,
           panelColor: panelColor,
           foreground: foreground,
-          icon: Icons.sports_esports_rounded,
+          icon: Icons.park_rounded,
           semanticLabel: 'Jouer',
           onTap: onPlay,
         ),
@@ -1446,15 +1458,6 @@ class _BitiActionBar extends StatelessWidget {
           icon: sleeping ? Icons.alarm_rounded : Icons.bedtime_rounded,
           semanticLabel: sleeping ? 'Réveiller' : 'Dormir',
           onTap: onSleep,
-        ),
-        const SizedBox(width: gap),
-        _SquareAction(
-          size: buttonSide,
-          panelColor: panelColor,
-          foreground: foreground,
-          icon: Icons.phonelink_ring_rounded,
-          semanticLabel: 'Échanger avec un autre téléphone',
-          onTap: onTransfer,
         ),
         const SizedBox(width: gap),
         _SquareAction(
@@ -1561,6 +1564,7 @@ List<Color> _spriteTintPalette() {
 class _BitiSettingsSheet extends StatefulWidget {
   const _BitiSettingsSheet({
     required this.profile,
+    required this.isMainBiti,
     required this.lifecycle,
     required this.onSpriteColorsSelected,
     required this.onShowHelp,
@@ -1569,6 +1573,7 @@ class _BitiSettingsSheet extends StatefulWidget {
   });
 
   final BitiProfile profile;
+  final bool isMainBiti;
   final LifecycleService lifecycle;
   final void Function(int a, int b) onSpriteColorsSelected;
   final VoidCallback onShowHelp;
@@ -1746,11 +1751,26 @@ class _BitiSettingsSheetState extends State<_BitiSettingsSheet> {
                 ),
                 const Divider(color: Colors.white24),
                 const SizedBox(height: 6),
-                Text(
-                  'Nom de Biti',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(color: sheetFg),
+                Row(
+                  children: <Widget>[
+                    Text(
+                      'Nom de Biti',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.titleSmall?.copyWith(color: sheetFg),
+                    ),
+                    if (widget.isMainBiti) ...<Widget>[
+                      const SizedBox(width: 8),
+                      Tooltip(
+                        message: 'Ton Biti principal (celui créé avec l’app)',
+                        child: Icon(
+                          Icons.home_rounded,
+                          size: 20,
+                          color: sheetFg.withValues(alpha: 0.85),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 6),
                 TextField(

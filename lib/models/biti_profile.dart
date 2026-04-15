@@ -1,6 +1,5 @@
-import 'dart:math';
-
 import 'package:flutter/foundation.dart';
+import 'package:uuid/uuid.dart';
 
 /// Données persistées d’un Biti (identité, stats, apparence).
 @immutable
@@ -18,9 +17,6 @@ class BitiProfile {
     this.customColorA,
     this.customColorB,
   });
-
-  /// Identifiant stable (liste, transfert, suppression).
-  final String id;
 
   factory BitiProfile.fromJson(Map<String, dynamic> json) {
     final dynamic rawName = json['name'];
@@ -46,8 +42,13 @@ class BitiProfile {
     );
   }
 
-  static String createId() =>
-      'b_${DateTime.now().microsecondsSinceEpoch}_${Random().nextInt(1 << 20)}';
+  /// Identifiant stable (liste, transfert, suppression).
+  final String id;
+
+  static const Uuid _uuid = Uuid();
+
+  /// Identifiant unique (v4) pour nouveaux profils / collisions.
+  static String createId() => _uuid.v4();
 
   static String _readId(Object? raw, {required String name, Object? xp}) {
     if (raw is String && raw.trim().isNotEmpty) return raw.trim();

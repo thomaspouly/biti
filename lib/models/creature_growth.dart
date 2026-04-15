@@ -8,9 +8,6 @@ class CreatureGrowth {
   /// XP pour **Nourrir** (bouton) ou **récolter** un point vert sur la grille.
   static const int xpPerFoodAction = 5;
 
-  /// XP pour **nettoyer** un excrément (tap sur le pixel marron).
-  static const int xpPerWasteCleanup = 2;
-
   /// XP cumulée **minimale** pour être au niveau donné (index = niveau − 1).
   ///
   /// Barème (équivalent grossier à l’ancienne progression temps : ~1 XP/s) :
