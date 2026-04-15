@@ -151,6 +151,13 @@ class LifecycleService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Nettoyage d’un excrément sur la grille (tap).
+  void collectWasteCleanup() {
+    if (_dead) return;
+    xp += CreatureGrowth.xpPerWasteCleanup;
+    notifyListeners();
+  }
+
   /// Jouer : coûte un peu d’énergie, remonte l’humeur, court état excité.
   void play() {
     if (_dead) return;

@@ -8,11 +8,14 @@ class CreatureGrowth {
   /// XP pour **Nourrir** (bouton) ou **récolter** un point vert sur la grille.
   static const int xpPerFoodAction = 5;
 
+  /// XP pour **nettoyer** un excrément (tap sur le pixel marron).
+  static const int xpPerWasteCleanup = 2;
+
   /// XP cumulée **minimale** pour être au niveau donné (index = niveau − 1).
   ///
   /// Barème (équivalent grossier à l’ancienne progression temps : ~1 XP/s) :
   /// - Niv. 2 : 3 600 XP · Niv. 3 : 7 200 · Niv. 4 : 18 000 · Niv. 5 : 25 200 · Niv. 6 : 36 000
-  static const List<int> xpLevelStarts = [0, 700, 1400, 2800, 5600, 11200];
+  static const List<int> xpLevelStarts = [0, 700, 3000, 6000, 12000, 24000];
 
   /// Niveau entre **1** et **6** selon l’XP cumulée.
   static int levelFromXp(int xp) {

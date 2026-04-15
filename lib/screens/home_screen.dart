@@ -36,8 +36,9 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
-  static const int _gridW = 32;
-  static const int _gridH = 32;
+  /// Terrain de jeu : base 32×32, agrandi d’un facteur **×1.3** (≈42 cellules).
+  static const int _gridW = 42;
+  static const int _gridH = 42;
 
   late final LifecycleService _lifecycle;
   late final HeartbeatVibrationService _heartbeat;
@@ -233,8 +234,8 @@ class _HomeScreenState extends State<HomeScreen>
   void _onCellTap(int gx, int gy) {
     if (_lifecycle.isDead) return;
     if (_grid.removeWasteAt(gx, gy)) {
+      _lifecycle.collectWasteCleanup();
       HapticFeedback.lightImpact();
-      setState(() {});
       return;
     }
     if (_grid.collectFoodAt(gx, gy)) {
@@ -479,7 +480,8 @@ class _HomeScreenState extends State<HomeScreen>
             '• Dormir : récupère de l’énergie tant que Biti dort.\n\n'
             'Les vibrations rythment comme un pouls : plus l’énergie est basse, '
             'plus le rythme ralentit.\n\n'
-            'Des pixels marron peuvent apparaître : appuie dessus pour nettoyer.\n\n'
+            'Des pixels marron peuvent apparaître : appuie dessus pour nettoyer '
+            '(+${CreatureGrowth.xpPerWasteCleanup} XP).\n\n'
             'Les points verts sont de la nourriture : appuie dessus pour la '
             'récolter (ça remonte un peu la faim et donne +${CreatureGrowth.xpPerFoodAction} XP).\n\n'
             'La **taille** de Biti suit des **niveaux** selon l’XP : +${CreatureGrowth.xpPerSecondWhenAlive} '
