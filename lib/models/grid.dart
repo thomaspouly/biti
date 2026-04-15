@@ -156,20 +156,11 @@ class PixelGridModel {
     _bump();
   }
 
-  /// Peint la silhouette du sprite courant sur la grille (pixels non transparents).
-  void syncCreatureFootprint(
+  void _stampCreatureFootprint(
     int originX,
     int originY,
     List<List<Color>> frame,
   ) {
-    for (int y = 0; y < height; y++) {
-      for (int x = 0; x < width; x++) {
-        final GridCell c = cells[y][x];
-        if (c.kind == CellKind.creature) {
-          cells[y][x] = GridCell(color: _emptyColor);
-        }
-      }
-    }
     for (int fy = 0; fy < frame.length; fy++) {
       final List<Color> row = frame[fy];
       for (int fx = 0; fx < row.length; fx++) {
@@ -185,6 +176,42 @@ class PixelGridModel {
           cells[gy][gx] = GridCell(color: pixel, kind: CellKind.creature);
         }
       }
+    }
+  }
+
+  /// Peint la silhouette du sprite courant sur la grille (pixels non transparents).
+  void syncCreatureFootprint(
+    int originX,
+    int originY,
+    List<List<Color>> frame,
+  ) {
+    clearCreatureCells();
+    _stampCreatureFootprint(originX, originY, frame);
+    _bump();
+  }
+
+  /// Deux Biti sur le même terrain (empreintes superposées possibles).
+  void syncTwoCreatureFootprints(
+    int aX,
+    int aY,
+    List<List<Color>> aFrame,
+    int bX,
+    int bY,
+    List<List<Color>> bFrame,
+  ) {
+    clearCreatureCells();
+    _stampCreatureFootprint(aX, aY, aFrame);
+    _stampCreatureFootprint(bX, bY, bFrame);
+    _bump();
+  }
+
+  /// Plusieurs Biti sur le même terrain (l’ordre des empreintes compte : la dernière domine en cas de chevauchement).
+  void syncMultiCreatureFootprints(
+    List<({int x, int y, List<List<Color>> frame})> stamps,
+  ) {
+    clearCreatureCells();
+    for (final ({int x, int y, List<List<Color>> frame}) s in stamps) {
+      _stampCreatureFootprint(s.x, s.y, s.frame);
     }
     _bump();
   }

@@ -6,6 +6,8 @@ void main() {
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(const BitiApp());
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
 
     expect(find.text('Biti'), findsOneWidget);
     expect(find.text('Nourrir'), findsOneWidget);

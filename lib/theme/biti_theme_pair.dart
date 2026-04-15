@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../models/biti_profile.dart';
+
 /// Paire de couleurs : tout l’UI et le terrain utilisent uniquement des points
 /// sur le segment **[a] → [b]** ([mix]).
 @immutable
@@ -57,6 +59,16 @@ class BitiThemePair {
       return presets[0];
     }
     return presets[index];
+  }
+
+  /// Thème du Biti : combinaison perso ou préréglage.
+  static BitiThemePair pairFor(BitiProfile profile) {
+    final int? ca = profile.customColorA;
+    final int? cb = profile.customColorB;
+    if (ca != null && cb != null) {
+      return BitiThemePair(a: Color(ca), b: Color(cb));
+    }
+    return presetOrDefault(profile.themePresetIndex);
   }
 
   @override

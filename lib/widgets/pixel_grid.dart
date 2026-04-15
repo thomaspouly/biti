@@ -13,7 +13,30 @@ const int _tapSearchRadiusCells = 4;
 /// Au-delà de cette distance (× taille de case), on ne « colle » pas au caca / nourriture.
 const double _tapSlopInCellUnits = 1.9;
 
-/// Retourne la case [CellKind.waste] ou [CellKind.food] la plus proche du doigt, sinon la case directement sous le tap.
+/// Données pour afficher un Biti sur le plateau (plusieurs instances possibles).
+@immutable
+class PixelGridBoardBiti {
+  const PixelGridBoardBiti({
+    required this.name,
+    required this.creature,
+    required this.mood,
+    required this.lean,
+    required this.growthLevel,
+    required this.creatureTheme,
+    this.isSelected = false,
+  });
+
+  final String name;
+  final Creature creature;
+  final CreatureMood mood;
+  final double lean;
+  final int growthLevel;
+  final BitiThemePair creatureTheme;
+
+  /// Contour rouge sur le plateau ([PixelGrid]).
+  final bool isSelected;
+}
+
 (int gx, int gy) _tapCellWithSlop(
   PixelGridModel model,
   double lx,
@@ -60,41 +83,31 @@ const double _tapSlopInCellUnits = 1.9;
   return (gx0, gy0);
 }
 
-/// Grille pixel + créature, rendue avec [CustomPainter] (performant).
+/// Grille pixel + créatures, rendue avec [CustomPainter] (performant).
+///
+/// [boardBitis] : ordre de peinture ; en général le Biti sélectionné en **dernier** pour passer au-dessus.
 class PixelGrid extends StatelessWidget {
   const PixelGrid({
     super.key,
     required this.model,
-    required this.creature,
-    required this.mood,
-    required this.lean,
-    required this.growthLevel,
     required this.theme,
+    required this.boardBitis,
+    required this.nameLabelColor,
     this.onCellTap,
   });
 
   final PixelGridModel model;
-  final Creature creature;
-  final CreatureMood mood;
-  final double lean;
-
-  /// Niveau de croissance 1–6 ([CreatureGrowth]).
-  final int growthLevel;
-
-  /// Couleurs du terrain : uniquement des points sur le segment thème.
   final BitiThemePair theme;
 
-  /// Coordonnées grille : excrément, nourriture, etc.
+  /// Ordre = z-order (dernier au premier plan).
+  final List<PixelGridBoardBiti> boardBitis;
+
+  final Color nameLabelColor;
+
   final void Function(int gridX, int gridY)? onCellTap;
 
   @override
   Widget build(BuildContext context) {
-    final SpriteFrame frame = CreatureSpriteLibrary.currentFrame(
-      mood,
-      creature.frameIndex,
-      growthLevel,
-    );
-
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final double width = constraints.maxWidth;
@@ -107,17 +120,37 @@ class PixelGrid extends StatelessWidget {
             CustomPaint(
               painter: PixelGridPainter(model: model, theme: theme),
             ),
-            CustomPaint(
-              painter: CreaturePainter(
-                frame: frame,
-                gridWidth: model.width,
-                gridHeight: model.height,
-                creatureX: creature.gridX,
-                creatureY: creature.gridY,
-                lean: lean,
-                theme: theme,
+            for (final PixelGridBoardBiti b in boardBitis)
+              CustomPaint(
+                painter: CreaturePainter(
+                  frame: CreatureSpriteLibrary.currentFrame(
+                    b.mood,
+                    b.creature.frameIndex,
+                    b.growthLevel,
+                  ),
+                  gridWidth: model.width,
+                  gridHeight: model.height,
+                  creatureX: b.creature.gridX,
+                  creatureY: b.creature.gridY,
+                  lean: b.lean,
+                  theme: b.creatureTheme,
+                ),
               ),
-            ),
+            for (final PixelGridBoardBiti b in boardBitis)
+              if (b.isSelected)
+                _SelectedBitiOutline(
+                  creature: b.creature,
+                  cellW: cellW,
+                  cellH: cellH,
+                ),
+            for (final PixelGridBoardBiti b in boardBitis)
+              _BoardBitiNameLabel(
+                name: b.name,
+                creature: b.creature,
+                cellW: cellW,
+                cellH: cellH,
+                color: nameLabelColor,
+              ),
             if (onCellTap != null)
               Positioned.fill(
                 child: GestureDetector(
@@ -138,6 +171,90 @@ class PixelGrid extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+/// Cadre rouge aligné sur la boîte du sprite (même repère que [CreaturePainter]).
+class _SelectedBitiOutline extends StatelessWidget {
+  const _SelectedBitiOutline({
+    required this.creature,
+    required this.cellW,
+    required this.cellH,
+  });
+
+  final Creature creature;
+  final double cellW;
+  final double cellH;
+
+  static const Color _outline = Color(0xFFE53935);
+
+  @override
+  Widget build(BuildContext context) {
+    final double padX = cellW * gameBoardCellPaddingRatio;
+    final double padY = cellH * gameBoardCellPaddingRatio;
+    final double innerW = cellW - 2 * padX;
+    final double innerH = cellH - 2 * padY;
+    final double left = creature.gridX * cellW + padX;
+    final double top = creature.gridY * cellH + padY;
+    final double w = creature.spriteWidth * innerW;
+    final double h = creature.spriteHeight * innerH;
+    final double r = (math.min(w, h) * 0.14).clamp(2.0, 8.0);
+    return Positioned(
+      left: left - 1.5,
+      top: top - 1.5,
+      width: w + 3,
+      height: h + 3,
+      child: IgnorePointer(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(r),
+            border: Border.all(color: _outline, width: 2.25),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BoardBitiNameLabel extends StatelessWidget {
+  const _BoardBitiNameLabel({
+    required this.name,
+    required this.creature,
+    required this.cellW,
+    required this.cellH,
+    required this.color,
+  });
+
+  final String name;
+  final Creature creature;
+  final double cellW;
+  final double cellH;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final double cx =
+        (creature.gridX + creature.spriteWidth * 0.5) * cellW;
+    final double top = (creature.gridY + creature.spriteHeight) * cellH + 1;
+    final double fontSize = (cellH * 0.26).clamp(7.0, 10.5);
+    return Positioned(
+      left: cx - 48,
+      width: 96,
+      top: top,
+      child: Text(
+        name,
+        textAlign: TextAlign.center,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: fontSize,
+          height: 1.05,
+          color: color.withOpacity(0.92),
+          fontWeight: FontWeight.w500,
+        ),
+      ),
     );
   }
 }

@@ -190,17 +190,16 @@ class LifecycleService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Instantané pour [BitiStorage].
-  BitiProfile toProfile() {
-    return BitiProfile(
-      name: name,
-      hunger: hunger,
-      energy: energy,
-      mood: mood,
-      xp: xp,
-      sleeping: sleeping,
-      isDead: isDead,
-    );
+  /// Remplace les champs persistables (ex. après un transfert BLE depuis le stockage).
+  void applyFromProfile(BitiProfile p) {
+    hunger = p.hunger.clamp(0, 100);
+    energy = p.energy.clamp(0, 100);
+    mood = p.mood.clamp(0, 100);
+    xp = p.xp.clamp(0, 1 << 30);
+    name = _resolveBitiName(p);
+    sleeping = p.sleeping;
+    _dead = p.isDead;
+    notifyListeners();
   }
 
   @override

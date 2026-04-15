@@ -47,5 +47,13 @@
 	<true/>
 	<key>NSMotionUsageDescription</key>
 	<string>Biti utilise le mouvement pour réagir aux secousses et à l’inclinaison.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Biti a besoin de la localisation pour détecter les appareils Bluetooth à proximité lors du transfert de votre créature (exigence iOS pour le scan BLE).</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Biti n’utilise la localisation qu’avec l’app au premier plan, pour le scan Bluetooth lors du transfert de votre créature.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Biti utilise le Bluetooth pour transférer votre créature vers un autre téléphone à proximité.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>Biti diffuse en Bluetooth pour permettre à un autre joueur de découvrir et recevoir votre Biti.</string>
 </dict>
 </plist>

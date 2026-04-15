@@ -1,20 +1,19 @@
 import 'package:flutter/material.dart';
 
-import 'models/biti_profile.dart';
-import 'screens/home_screen.dart';
+import 'models/biti_collection.dart';
+import 'screens/splash_screen.dart';
 import 'services/biti_storage.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final BitiProfile? restored = await BitiStorage.load();
-  runApp(BitiApp(restoredProfile: restored));
+  final BitiCollection collection = await BitiStorage.loadCollection();
+  runApp(BitiApp(initialCollection: collection));
 }
 
 class BitiApp extends StatelessWidget {
-  const BitiApp({super.key, this.restoredProfile});
+  const BitiApp({super.key, required this.initialCollection});
 
-  /// Profil restauré depuis les préférences, ou `null` pour une nouvelle partie.
-  final BitiProfile? restoredProfile;
+  final BitiCollection initialCollection;
 
   @override
   Widget build(BuildContext context) {
@@ -54,7 +53,7 @@ class BitiApp extends StatelessWidget {
           child: child,
         );
       },
-      home: HomeScreen(restoredProfile: restoredProfile),
+      home: SplashScreen(initialCollection: initialCollection),
     );
   }
 }
