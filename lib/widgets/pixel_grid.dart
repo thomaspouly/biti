@@ -94,6 +94,11 @@ class PixelGrid extends StatelessWidget {
     required this.boardBitis,
     required this.nameLabelColor,
     this.onCellTap,
+    this.tapIndicatorGx,
+    this.tapIndicatorGy,
+    this.pendingFoodDarkGx,
+    this.pendingFoodDarkGy,
+    this.walkTrailCellCenters = const <(int, int)>[],
   });
 
   final PixelGridModel model;
@@ -105,6 +110,17 @@ class PixelGrid extends StatelessWidget {
   final Color nameLabelColor;
 
   final void Function(int gridX, int gridY)? onCellTap;
+
+  /// Dernière case touchée (feedback visuel bref).
+  final int? tapIndicatorGx;
+  final int? tapIndicatorGy;
+
+  /// Nourriture visée au tap (marche) : pastille restée foncée jusqu’à la collecte.
+  final int? pendingFoodDarkGx;
+  final int? pendingFoodDarkGy;
+
+  /// Trajet de balade (centres de cases), ligne jaune sous les sprites.
+  final List<(int, int)> walkTrailCellCenters;
 
   @override
   Widget build(BuildContext context) {
@@ -118,7 +134,14 @@ class PixelGrid extends StatelessWidget {
           fit: StackFit.expand,
           children: <Widget>[
             CustomPaint(
-              painter: PixelGridPainter(model: model, theme: theme),
+              painter: PixelGridPainter(
+                model: model,
+                theme: theme,
+                tapIndicatorGx: tapIndicatorGx,
+                tapIndicatorGy: tapIndicatorGy,
+                pendingFoodDarkGx: pendingFoodDarkGx,
+                pendingFoodDarkGy: pendingFoodDarkGy,
+              ),
             ),
             for (final PixelGridBoardBiti b in boardBitis)
               CustomPaint(
@@ -136,6 +159,13 @@ class PixelGrid extends StatelessWidget {
                   theme: b.creatureTheme,
                 ),
               ),
+            CustomPaint(
+              painter: _WalkTrailPainter(
+                gridWidth: model.width,
+                gridHeight: model.height,
+                cellCenters: walkTrailCellCenters,
+              ),
+            ),
             for (final PixelGridBoardBiti b in boardBitis)
               if (b.isSelected)
                 _SelectedBitiOutline(
@@ -264,11 +294,87 @@ class _BoardBitiNameLabel extends StatelessWidget {
   }
 }
 
+/// Trajet balade au-dessus des sprites pour rester bien visible.
+class _WalkTrailPainter extends CustomPainter {
+  _WalkTrailPainter({
+    required this.gridWidth,
+    required this.gridHeight,
+    this.cellCenters = const <(int, int)>[],
+  });
+
+  final int gridWidth;
+  final int gridHeight;
+  final List<(int, int)> cellCenters;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final List<(int, int)> trail = cellCenters;
+    if (trail.length < 2) return;
+    final double cellW = size.width / gridWidth;
+    final double cellH = size.height / gridHeight;
+    final double padX = cellW * gameBoardCellPaddingRatio;
+    final double padY = cellH * gameBoardCellPaddingRatio;
+
+    Offset centerForCell(int gx, int gy) {
+      final Rect rCell = Rect.fromLTWH(
+        gx * cellW + padX,
+        gy * cellH + padY,
+        cellW - 2 * padX + 0.5,
+        cellH - 2 * padY + 0.5,
+      );
+      return rCell.center;
+    }
+
+    final Path path = Path();
+    for (int i = 0; i < trail.length; i++) {
+      final Offset o = centerForCell(trail[i].$1, trail[i].$2);
+      if (i == 0) {
+        path.moveTo(o.dx, o.dy);
+      } else {
+        path.lineTo(o.dx, o.dy);
+      }
+    }
+    final Paint trailPaint = Paint()
+      ..color = const Color(0xFFF9CC28).withValues(alpha: 0.95)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = math.max(1.2, math.min(cellW, cellH) * 0.065)
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    canvas.drawPath(path, trailPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _WalkTrailPainter oldDelegate) {
+    if (oldDelegate.gridWidth != gridWidth ||
+        oldDelegate.gridHeight != gridHeight) {
+      return true;
+    }
+    final List<(int, int)> a = oldDelegate.cellCenters;
+    final List<(int, int)> b = cellCenters;
+    if (a.length != b.length) return true;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return true;
+    }
+    return false;
+  }
+}
+
 class PixelGridPainter extends CustomPainter {
-  PixelGridPainter({required this.model, required this.theme});
+  PixelGridPainter({
+    required this.model,
+    required this.theme,
+    this.tapIndicatorGx,
+    this.tapIndicatorGy,
+    this.pendingFoodDarkGx,
+    this.pendingFoodDarkGy,
+  });
 
   final PixelGridModel model;
   final BitiThemePair theme;
+  final int? tapIndicatorGx;
+  final int? tapIndicatorGy;
+  final int? pendingFoodDarkGx;
+  final int? pendingFoodDarkGy;
 
   /// Fond uniforme du terrain (un peu plus foncé sur le segment thème).
   Color get _terrainBase => theme.mix(0.0);
@@ -297,19 +403,45 @@ class PixelGridPainter extends CustomPainter {
         );
         final RRect rRCell = RRect.fromRectAndRadius(rCell, corner);
         final Paint paint = Paint();
+        final bool tapHere =
+            tapIndicatorGx != null &&
+            tapIndicatorGy != null &&
+            tapIndicatorGx == x &&
+            tapIndicatorGy == y;
 
         if (cell.kind == CellKind.food) {
           paint.color = _terrainBase;
           canvas.drawRRect(rRCell, paint);
-          paint.color = theme.mix(0.36);
+          final bool foodPendingDark =
+              pendingFoodDarkGx != null &&
+              pendingFoodDarkGy != null &&
+              pendingFoodDarkGx == x &&
+              pendingFoodDarkGy == y;
+          paint.color = foodPendingDark ? theme.mix(0.66) : theme.mix(0.36);
           final double r = math.min(rCell.width, rCell.height) * 0.38;
           canvas.drawCircle(rCell.center, r, paint);
         } else if (cell.kind == CellKind.filled) {
           paint.color = theme.mix(0.88);
           canvas.drawRRect(rRCell, paint);
+          if (tapHere) {
+            paint
+              ..color = theme.mix(0.5).withValues(alpha: 0.55)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 2;
+            canvas.drawRRect(rRCell, paint);
+            paint.style = PaintingStyle.fill;
+          }
         } else {
           paint.color = _terrainBase;
           canvas.drawRRect(rRCell, paint);
+          if (tapHere) {
+            paint
+              ..color = theme.mix(0.45).withValues(alpha: 0.5)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 2;
+            canvas.drawRRect(rRCell, paint);
+            paint.style = PaintingStyle.fill;
+          }
         }
       }
     }
@@ -318,6 +450,10 @@ class PixelGridPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant PixelGridPainter oldDelegate) {
     return oldDelegate.model.paintEpoch != model.paintEpoch ||
-        oldDelegate.theme != theme;
+        oldDelegate.theme != theme ||
+        oldDelegate.tapIndicatorGx != tapIndicatorGx ||
+        oldDelegate.tapIndicatorGy != tapIndicatorGy ||
+        oldDelegate.pendingFoodDarkGx != pendingFoodDarkGx ||
+        oldDelegate.pendingFoodDarkGy != pendingFoodDarkGy;
   }
 }

@@ -12,6 +12,9 @@ class HeartbeatVibrationService {
 
   Timer? _timer;
 
+  /// Caresse active : pas de battements (évite de concurrencer les petites vibrations).
+  bool _pausedForCaress = false;
+
   /// Durée d’un cycle cardiaque (du 1er choc au suivant), selon l’énergie (0–100).
   Duration _cycleFromEnergy() {
     final double t = (_lifecycle.energy / 100).clamp(0.0, 1.0);
@@ -27,8 +30,24 @@ class HeartbeatVibrationService {
     _onLifecycle();
   }
 
+  void pauseForCaress() {
+    _pausedForCaress = true;
+    _timer?.cancel();
+    _timer = null;
+  }
+
+  void resumeAfterCaress() {
+    _pausedForCaress = false;
+    _onLifecycle();
+  }
+
   void _onLifecycle() {
     if (_lifecycle.isDead || _lifecycle.sleeping) {
+      _timer?.cancel();
+      _timer = null;
+      return;
+    }
+    if (_pausedForCaress) {
       _timer?.cancel();
       _timer = null;
       return;
@@ -38,12 +57,14 @@ class HeartbeatVibrationService {
 
   void _onBeat() {
     _timer = null;
-    if (_lifecycle.isDead || _lifecycle.sleeping) return;
+    if (_lifecycle.isDead || _lifecycle.sleeping || _pausedForCaress) return;
 
     HapticFeedback.mediumImpact();
     unawaited(
       Future<void>.delayed(const Duration(milliseconds: 95), () {
-        if (!_lifecycle.isDead && !_lifecycle.sleeping) {
+        if (!_lifecycle.isDead &&
+            !_lifecycle.sleeping &&
+            !_pausedForCaress) {
           HapticFeedback.lightImpact();
         }
       }),

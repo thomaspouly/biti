@@ -179,6 +179,23 @@ class LifecycleService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Pas réels pendant une balade : humeur ↑, énergie ↓ (hors sommeil / mort).
+  void applyWalkSessionSteps(int deltaSteps) {
+    if (_dead || sleeping || deltaSteps <= 0) return;
+    final int moodAdd = min(
+      100 - mood,
+      (deltaSteps / 18).ceil().clamp(1, 45),
+    );
+    final int energySub = min(
+      energy,
+      (deltaSteps / 15).ceil().clamp(1, 55),
+    );
+    mood = min(100, mood + moodAdd);
+    energy = max(0, energy - energySub);
+    _checkCriticalStreakAfterUpdate();
+    notifyListeners();
+  }
+
   /// Jouer : coûte un peu d’énergie, remonte l’humeur modérément, court état excité.
   void play() {
     if (_dead) return;

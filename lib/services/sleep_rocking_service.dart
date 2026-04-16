@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 
 /// Messages d’état pour la barre d’info en mode sommeil (gyroscope).
@@ -20,10 +21,14 @@ final class SleepRockingService {
   SleepRockingService({
     required this.onGuideChanged,
     required this.onEnergyDelta,
+    this.rockingEmaOut,
   });
 
   final void Function(SleepRockGuide guide) onGuideChanged;
   final void Function(int delta) onEnergyDelta;
+
+  /// Intensité lissée du bercement (pour jauge dans la zone d’état).
+  final ValueNotifier<double>? rockingEmaOut;
 
   StreamSubscription<GyroscopeEvent>? _gyro;
   Timer? _secondTimer;
@@ -39,8 +44,12 @@ final class SleepRockingService {
 
   static const double _emaAlpha = 0.12;
 
-  static const double _goodLo = 0.32;
-  static const double _goodHi = 1.02;
+  /// Seuils EMA (rad/s combiné) : même échelle que [rockingEmaOut].
+  static const double rockGoodEmaLo = 0.32;
+  static const double rockGoodEmaHi = 1.02;
+
+  /// Plafond d’affichage pour la jauge (curseur + zone verte).
+  static const double rockEmaDisplayMax = 1.35;
 
   void setSleeping(bool sleeping) {
     if (sleeping == _sleeping) return;
@@ -50,6 +59,7 @@ final class SleepRockingService {
       _goodSecondsThisTick = 0;
       _prevSample = DateTime.now();
       _guide = SleepRockGuide.rockTooSlow;
+      rockingEmaOut?.value = 0;
       onGuideChanged(_guide);
       _gyro = gyroscopeEventStream(
         samplingPeriod: SensorInterval.gameInterval,
@@ -63,6 +73,7 @@ final class SleepRockingService {
       _gyro = null;
       _secondTimer?.cancel();
       _secondTimer = null;
+      rockingEmaOut?.value = 0;
     }
   }
 
@@ -77,11 +88,12 @@ final class SleepRockingService {
     // Balancement gauche-droite : combinaison des axes hors « pitch avant-arrière ».
     final double mag = sqrt(e.x * e.x + e.z * e.z);
     _ema = (1 - _emaAlpha) * _ema + _emaAlpha * mag;
+    rockingEmaOut?.value = _ema;
 
-    if (_ema >= _goodLo && _ema <= _goodHi) {
+    if (_ema >= rockGoodEmaLo && _ema <= rockGoodEmaHi) {
       _goodSecondsThisTick += dtClamped;
       _setGuide(SleepRockGuide.rockGood);
-    } else if (_ema < _goodLo) {
+    } else if (_ema < rockGoodEmaLo) {
       _setGuide(SleepRockGuide.rockTooSlow);
     } else {
       _setGuide(SleepRockGuide.rockTooFast);
