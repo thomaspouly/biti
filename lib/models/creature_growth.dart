@@ -1,4 +1,4 @@
-/// Croissance de Biti : **XP** cumulée → niveaux 1–6 (tailles sur grille inchangées).
+/// Croissance de Biti : **XP** cumulée → niveaux (voir [xpLevelStarts], [maxGrowthLevel]).
 class CreatureGrowth {
   CreatureGrowth._();
 
@@ -8,10 +8,13 @@ class CreatureGrowth {
   /// XP pour **Nourrir** (bouton) ou **récolter** un point vert sur la grille.
   static const int xpPerFoodAction = 5;
 
+  /// Nombre de niveaux (= longueur de [xpLevelStarts]).
+  static int get maxGrowthLevel => xpLevelStarts.length;
+
   /// XP cumulée **minimale** pour être au niveau donné (index = niveau − 1).
   ///
-  /// Barème (équivalent grossier à l’ancienne progression temps : ~1 XP/s) :
-  /// - Niv. 2 : 3 600 XP · Niv. 3 : 7 200 · Niv. 4 : 18 000 · Niv. 5 : 25 200 · Niv. 6 : 36 000
+  /// Paliers progressifs (résumé) : montée jusqu’au niveau [maxGrowthLevel] ;
+  /// les derniers niveaux demandent plus d’XP cumulée.
   static const List<int> xpLevelStarts = <int>[
     0,
     700,
@@ -19,9 +22,13 @@ class CreatureGrowth {
     6000,
     12000,
     24000,
+    42000,
+    65000,
+    95000,
+    135000,
   ];
 
-  /// Niveau entre **1** et **6** selon l’XP cumulée.
+  /// Niveau entre **1** et [maxGrowthLevel] selon l’XP cumulée.
   static int levelFromXp(int xp) {
     final int x = xp < 0 ? 0 : xp;
     int level = 1;
@@ -30,28 +37,50 @@ class CreatureGrowth {
         level = i + 1;
       }
     }
-    return level.clamp(1, 6);
+    return level.clamp(1, maxGrowthLevel);
   }
 
   /// Côté du sprite sur la grille (niveau 3 = 5×5, forme de référence).
   static int gridSpanForLevel(int level) {
-    const List<int> spans = <int>[1, 2, 5, 7, 9, 11];
-    return spans[level.clamp(1, 6) - 1];
+    const List<int> spans = <int>[
+      1,
+      2,
+      5,
+      7,
+      9,
+      11,
+      13,
+      15,
+      17,
+      19,
+    ];
+    return spans[level.clamp(1, maxGrowthLevel) - 1];
   }
 
-  /// Taille du **terrain** (carré) en nombre de cases selon le niveau **1–6**.
-  /// Niveau **1** : 30×30, puis **+4** cases par niveau (50×50 au niveau 6).
+  /// Taille du **terrain** (carré) en nombre de cases selon le niveau.
+  /// Niveau **1** : 30×30, puis **+4** cases par niveau.
   static int terrainSideForLevel(int level) {
-    const List<int> sides = <int>[30, 34, 38, 42, 46, 50];
-    return sides[level.clamp(1, 6) - 1];
+    const List<int> sides = <int>[
+      30,
+      34,
+      38,
+      42,
+      46,
+      50,
+      54,
+      58,
+      62,
+      66,
+    ];
+    return sides[level.clamp(1, maxGrowthLevel) - 1];
   }
 
   /// Remplissage **0.0–1.0** du segment XP jusqu’au **prochain** niveau.
-  /// Au niveau **6**, retourne **1.0**.
+  /// Au dernier niveau, retourne **1.0**.
   static double levelFillProgressFromXp(int xp) {
     final int x = xp < 0 ? 0 : xp;
     final int lv = levelFromXp(x);
-    if (lv >= 6) return 1.0;
+    if (lv >= maxGrowthLevel) return 1.0;
     final int start = xpLevelStarts[lv - 1];
     final int end = xpLevelStarts[lv];
     if (end <= start) return 1.0;

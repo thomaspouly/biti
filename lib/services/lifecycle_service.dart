@@ -20,7 +20,12 @@ class LifecycleService extends ChangeNotifier {
     this.criticalStreakDuration = const Duration(hours: 2),
     this.criticalGaugeThreshold = 20,
     BitiProfile? restored,
-  }) : hunger = (restored?.hunger ?? 75).clamp(0, 100),
+  }) : _ticksPerEnergyMoodPoint = max(
+         1,
+         _energyMoodFullDrainDuration.inMilliseconds ~/
+             (max(1, tickInterval.inMilliseconds) * 100),
+       ),
+       hunger = (restored?.hunger ?? 75).clamp(0, 100),
        energy = (restored?.energy ?? 80).clamp(0, 100),
        mood = (restored?.mood ?? 72).clamp(0, 100),
        xp = (restored?.xp ?? 0).clamp(0, 1 << 30),
@@ -46,6 +51,14 @@ class LifecycleService extends ChangeNotifier {
   }
 
   final Duration tickInterval;
+
+  /// Temps réel pour perdre **100** points d’énergie ou d’humeur (hors sommeil), au rythme des ticks.
+  static const Duration _energyMoodFullDrainDuration = Duration(hours: 12);
+
+  /// Un pas d’énergie + humeur tous les [_ticksPerEnergyMoodPoint] ticks (faim inchangée).
+  final int _ticksPerEnergyMoodPoint;
+
+  int _energyMoodDecayCounter = 0;
 
   /// Si faim, énergie ou humeur reste **strictement** sous ce seuil sans interruption
   /// pendant [criticalStreakDuration], Biti meurt (définitif pour cette session).
@@ -73,9 +86,14 @@ class LifecycleService extends ChangeNotifier {
   bool _dead;
   DateTime? _criticalSince;
 
+  /// Throttle des caresses (zone d’état) pour l’humeur.
+  DateTime? _lastCaressMoodAt;
+
+  static const Duration _caressMoodMinGap = Duration(milliseconds: 550);
+
   bool get isDead => _dead;
 
-  /// Niveau de taille 1–6 dérivé de l’XP.
+  /// Niveau de taille dérivé de l’XP (voir [CreatureGrowth.maxGrowthLevel]).
   int get growthLevel => CreatureGrowth.levelFromXp(xp);
 
   CreatureMood get derivedMood {
@@ -117,15 +135,16 @@ class LifecycleService extends ChangeNotifier {
   void _onTick() {
     if (_dead) return;
     if (sleeping) {
-      energy = min(100, energy + 2);
       hunger = max(0, hunger - 1);
-      if (energy >= 96) {
-        sleeping = false;
-      }
+      // L’énergie en sommeil vient du berçage (gyroscope), pas du tick périodique.
     } else {
       hunger = max(0, hunger - 1);
-      energy = max(0, energy - 1);
-      mood = max(0, mood - 1);
+      _energyMoodDecayCounter++;
+      if (_energyMoodDecayCounter >= _ticksPerEnergyMoodPoint) {
+        _energyMoodDecayCounter = 0;
+        energy = max(0, energy - 1);
+        mood = max(0, mood - 1);
+      }
     }
     _checkCriticalStreakAfterUpdate();
     notifyListeners();
@@ -140,11 +159,11 @@ class LifecycleService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Nourrir : remonte la faim et l’humeur légèrement.
+  /// Nourrir : remonte la faim et l’humeur un peu.
   void feed() {
     if (_dead) return;
     hunger = min(100, hunger + 28);
-    mood = min(100, mood + 6);
+    mood = min(100, mood + 2);
     xp += CreatureGrowth.xpPerFoodAction;
     _checkCriticalStreakAfterUpdate();
     notifyListeners();
@@ -154,25 +173,42 @@ class LifecycleService extends ChangeNotifier {
   void collectFoodMorsel() {
     if (_dead) return;
     hunger = min(100, hunger + 12);
-    mood = min(100, mood + 3);
+    mood = min(100, mood + 1);
     xp += CreatureGrowth.xpPerFoodAction;
     _checkCriticalStreakAfterUpdate();
     notifyListeners();
   }
 
-  /// Jouer : coûte un peu d’énergie, remonte l’humeur, court état excité.
+  /// Jouer : coûte un peu d’énergie, remonte l’humeur modérément, court état excité.
   void play() {
     if (_dead) return;
     energy = max(0, energy - 12);
     hunger = max(0, hunger - 4);
-    mood = min(100, mood + 22);
+    mood = min(100, mood + 8);
     _excitedUntil = DateTime.now().add(const Duration(seconds: 3));
     sleeping = false;
     _checkCriticalStreakAfterUpdate();
     notifyListeners();
   }
 
-  /// Endormir / réveiller (toggle) pour récupérer de l’énergie.
+  /// Caresse (glisser sur la zone d’état) : petit gain d’humeur, limité par [_caressMoodMinGap].
+  /// Retourne `true` si l’humeur a été ajustée (persist recommandé).
+  bool registerCaressStroke() {
+    if (_dead || sleeping) return false;
+    final DateTime now = DateTime.now();
+    if (_lastCaressMoodAt != null &&
+        now.difference(_lastCaressMoodAt!) < _caressMoodMinGap) {
+      return false;
+    }
+    if (mood >= 100) return false;
+    _lastCaressMoodAt = now;
+    mood = min(100, mood + 1);
+    _checkCriticalStreakAfterUpdate();
+    notifyListeners();
+    return true;
+  }
+
+  /// Endormir / réveiller (toggle). En sommeil, l’énergie remonte via le berçage (gyro).
   void sleep() {
     if (_dead) return;
     sleeping = !sleeping;
@@ -180,6 +216,13 @@ class LifecycleService extends ChangeNotifier {
       _excitedUntil = null;
     }
     _checkCriticalStreakAfterUpdate();
+    notifyListeners();
+  }
+
+  /// Énergie gagnée pendant le sommeil (berçage correct), plafonnée à 100.
+  void addSleepRockEnergy(int delta) {
+    if (_dead || !sleeping || delta <= 0) return;
+    energy = min(100, energy + delta);
     notifyListeners();
   }
 

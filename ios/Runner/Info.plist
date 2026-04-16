@@ -31,22 +31,17 @@
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>NSMotionUsageDescription</key>
-	<string>Biti utilise le mouvement pour réagir aux secousses et à l’inclinaison.</string>
+	<string>Biti utilise le mouvement pour réagir aux secousses, à l’inclinaison, et pour le mode sommeil (berçage).</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Biti a besoin de la localisation pour détecter les appareils Bluetooth à proximité lors du transfert de votre créature (exigence iOS pour le scan BLE).</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>

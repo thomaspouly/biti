@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../models/biti_collection.dart';
+import 'first_biti_screen.dart';
 import 'home_screen.dart';
 
 /// Mascotte centrée pendant 2 s, puis passage à [HomeScreen].
@@ -30,7 +31,9 @@ class _SplashScreenState extends State<SplashScreen> {
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(
-        builder: (_) => HomeScreen(initialCollection: widget.initialCollection),
+        builder: (_) => widget.initialCollection.isEmpty
+            ? const FirstBitiScreen()
+            : HomeScreen(initialCollection: widget.initialCollection),
       ),
     );
   }

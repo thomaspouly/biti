@@ -5,6 +5,18 @@ import 'biti_profile.dart';
 /// Liste de Biti persistée + celui affiché sur l’écran d’accueil.
 @immutable
 class BitiCollection {
+  factory BitiCollection.fromJson(Map<String, dynamic> json) {
+    final List<dynamic>? raw = json['profiles'] as List<dynamic>?;
+    final List<BitiProfile> list = <BitiProfile>[];
+    if (raw != null) {
+      for (final dynamic e in raw) {
+        if (e is! Map<String, dynamic>) continue;
+        list.add(BitiProfile.fromJson(e));
+      }
+    }
+    final String? sid = json['selectedId'] as String?;
+    return BitiCollection(profiles: list, selectedId: sid);
+  }
   const BitiCollection({required this.profiles, this.selectedId});
 
   final List<BitiProfile> profiles;
@@ -46,19 +58,6 @@ class BitiCollection {
       p,
     ];
     return copyWith(profiles: next);
-  }
-
-  factory BitiCollection.fromJson(Map<String, dynamic> json) {
-    final List<dynamic>? raw = json['profiles'] as List<dynamic>?;
-    final List<BitiProfile> list = <BitiProfile>[];
-    if (raw != null) {
-      for (final dynamic e in raw) {
-        if (e is! Map<String, dynamic>) continue;
-        list.add(BitiProfile.fromJson(e));
-      }
-    }
-    final String? sid = json['selectedId'] as String?;
-    return BitiCollection(profiles: list, selectedId: sid);
   }
 
   Map<String, dynamic> toJson() => <String, dynamic>{

@@ -90,27 +90,9 @@ class BitiStorage {
 
     if (prefs.getBool(_legacyAutostartKey) != true) {
       await prefs.setBool(_legacyAutostartKey, true);
-      final BitiThemePair d = BitiThemePair.presets[0];
-      final BitiProfile seed = BitiProfile(
-        id: BitiProfile.createId(),
-        name: BitiProfile.defaultName,
-        hunger: 75,
-        energy: 80,
-        mood: 72,
-        xp: 0,
-        sleeping: false,
-        isDead: false,
-        themePresetIndex: 0,
-        customColorA: d.a.toARGB32(),
-        customColorB: d.b.toARGB32(),
-      );
-      final BitiCollection first = BitiCollection(
-        profiles: <BitiProfile>[seed],
-        selectedId: seed.id,
-      );
-      await saveCollection(first);
-      await _ensureMainBitiProfileIdAfterLoad(first);
-      return first;
+      const BitiCollection empty = BitiCollection(profiles: <BitiProfile>[]);
+      await _ensureMainBitiProfileIdAfterLoad(empty);
+      return empty;
     }
 
     const BitiCollection empty = BitiCollection(profiles: <BitiProfile>[]);
@@ -128,6 +110,36 @@ class BitiStorage {
     final String? raw = prefs.getString(_guestKeyV1);
     if (raw == null || raw.isEmpty) return null;
     return _decodeProfile(raw);
+  }
+
+  /// Crée un Biti avec nom et couleurs (premier lancement ou liste vide après envoi).
+  static Future<BitiCollection> createFirstBiti({
+    required String name,
+    required int colorAArgb,
+    required int colorBArgb,
+  }) async {
+    final BitiCollection c = await loadCollection();
+    final String n = name.trim().isEmpty ? BitiProfile.defaultName : name.trim();
+    final BitiProfile p = BitiProfile(
+      id: BitiProfile.createId(),
+      name: n,
+      hunger: 75,
+      energy: 80,
+      mood: 72,
+      xp: 0,
+      sleeping: false,
+      isDead: false,
+      themePresetIndex: 0,
+      customColorA: colorAArgb,
+      customColorB: colorBArgb,
+    );
+    final BitiCollection next = BitiCollection(
+      profiles: <BitiProfile>[...c.profiles, p],
+      selectedId: p.id,
+    );
+    await saveCollection(next);
+    await _ensureMainBitiProfileIdAfterLoad(next);
+    return next;
   }
 
   static Future<void> saveCollection(BitiCollection collection) async {

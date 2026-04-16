@@ -60,13 +60,13 @@ class CreatureSpriteLibrary {
     return builtIn[mood] ?? builtIn[CreatureMood.idle]!;
   }
 
-  /// [growthLevel] entre 1 et 6 (voir [CreatureGrowth]).
+  /// [growthLevel] entre 1 et [CreatureGrowth.maxGrowthLevel].
   static SpriteFrame currentFrame(
     CreatureMood mood,
     int index,
     int growthLevel,
   ) {
-    final int lv = growthLevel.clamp(1, 6);
+    final int lv = growthLevel.clamp(1, CreatureGrowth.maxGrowthLevel);
     final List<SpriteFrame> frames = framesFor(mood);
     final SpriteFrame base = frames[index % frames.length];
     final int span = CreatureGrowth.gridSpanForLevel(lv);

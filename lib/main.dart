@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'models/biti_collection.dart';
 import 'screens/splash_screen.dart';
@@ -6,6 +7,9 @@ import 'services/biti_storage.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await SystemChrome.setPreferredOrientations(<DeviceOrientation>[
+    DeviceOrientation.portraitUp,
+  ]);
   final BitiCollection collection = await BitiStorage.loadCollection();
   runApp(BitiApp(initialCollection: collection));
 }

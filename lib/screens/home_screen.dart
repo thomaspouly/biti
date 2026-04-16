@@ -16,10 +16,12 @@ import '../services/biti_transfer_service.dart';
 import '../services/heartbeat_vibration_service.dart';
 import '../services/lifecycle_service.dart';
 import '../services/sensor_service.dart';
+import '../services/sleep_rocking_service.dart';
 import '../theme/biti_theme_pair.dart';
 import '../widgets/biti_transfer_button.dart';
 import '../widgets/pixel_grid.dart';
 import '../widgets/stat_bar.dart';
+import 'first_biti_screen.dart';
 
 String _deathDurationLabel(Duration d) {
   final int minutes = d.inMinutes;
@@ -48,6 +50,8 @@ class _HomeScreenState extends State<HomeScreen>
   LifecycleService? _lifecycle;
   HeartbeatVibrationService? _heartbeat;
   SensorService? _sensors;
+  SleepRockingService? _sleepRock;
+  SleepRockGuide _sleepGuide = SleepRockGuide.rockTooSlow;
 
   /// Une entrée par profil : tous visibles sur le même plateau.
   final Map<String, Creature> _creaturesById = <String, Creature>{};
@@ -61,6 +65,9 @@ class _HomeScreenState extends State<HomeScreen>
   /// Zoom / pan du terrain (réinitialisable pour centrer sur le Biti).
   TransformationController? _terrainViewController;
 
+  /// Repère le carré logique du terrain (côté [side] pour le recentrage caméra).
+  final GlobalKey _terrainSquareKey = GlobalKey();
+
   late BitiCollection _collection;
 
   Timer? _moveTimer;
@@ -72,7 +79,23 @@ class _HomeScreenState extends State<HomeScreen>
   /// Durée **continue** où au moins une jauge reste sous le seuil critique → mort (pas de nouvelle partie dans l’app).
   static const Duration bitiDeathAfterCriticalLowStreak = Duration(hours: 2);
 
+  /// Délai entre deux pas sur la grille : plus court quand l’énergie est élevée.
+  static int _moveIntervalMsForEnergy(int energy) {
+    const int maxMs = 1700;
+    const int minMs = 210;
+    final double e = energy.clamp(0, 100) / 100.0;
+    return (maxMs - e * (maxMs - minMs)).round().clamp(minMs, maxMs);
+  }
+
   bool _stoppedForDeath = false;
+
+  /// Encadré infos du Biti réduit (plus d’espace pour le terrain).
+  bool _infoPanelCompact = false;
+
+  /// Mode caresse : la zone d’état (libellé sous les jauges) devient tactile.
+  bool _caressZoneActive = false;
+  double _caressDistAccum = 0;
+  DateTime? _lastCaressVibrateAt;
 
   int _lastGrowthLevel = 1;
 
@@ -292,10 +315,21 @@ class _HomeScreenState extends State<HomeScreen>
     _lastGrowthLevel = _lifecycle!.growthLevel;
     _terrainViewController = TransformationController();
 
+    _sleepRock = SleepRockingService(
+      onGuideChanged: (SleepRockGuide g) {
+        if (!mounted) return;
+        setState(() => _sleepGuide = g);
+      },
+      onEnergyDelta: (int d) {
+        if (!mounted || d <= 0) return;
+        _lifecycle?.addSleepRockEnergy(d);
+      },
+    );
+
     _sensors = SensorService(
       onShake: _lifecycle!.play,
       onTilt: (double v) {
-        if (!mounted) return;
+        if (!mounted || _lifecycle!.sleeping) return;
         setState(() {
           final Creature c = _selectedCreature;
           c.lean = (c.lean * 0.88 + v * 0.12).clamp(-1.0, 1.0);
@@ -317,13 +351,9 @@ class _HomeScreenState extends State<HomeScreen>
     _frameAnim!.addStatusListener(_onFrameAnimStatus);
     _frameAnim!.forward();
 
-    _moveTimer = Timer.periodic(const Duration(milliseconds: 3200), (_) {
-      if (!mounted || _lifecycle!.isDead || _lifecycle!.sleeping) return;
-      setState(() {
-        _randomStep();
-        _syncGrid();
-      });
-    });
+    if (!_lifecycle!.sleeping && !_lifecycle!.isDead) {
+      _scheduleMoveTick();
+    }
 
     _foodTimer = Timer.periodic(const Duration(seconds: 3), (_) {
       if (!mounted || _lifecycle!.isDead || _lifecycle!.sleeping) return;
@@ -340,6 +370,9 @@ class _HomeScreenState extends State<HomeScreen>
       });
     });
     unawaited(_refreshMainBitiProfileId());
+    if (_lifecycle!.sleeping) {
+      _sleepRock?.setSleeping(true);
+    }
   }
 
   Future<void> _switchToProfile(String id) async {
@@ -353,6 +386,7 @@ class _HomeScreenState extends State<HomeScreen>
     final BitiProfile? next = c.selected;
     if (next == null || !mounted) return;
     setState(() {
+      _caressZoneActive = false;
       _collection = c;
       _lifecycle!.applyFromProfile(next);
       _reanchorCreatureForGrowth();
@@ -370,6 +404,7 @@ class _HomeScreenState extends State<HomeScreen>
         await BitiStorage.saveLifecycleIntoProfile(_lifecycle!, cur);
       }
       setState(() {
+        _caressZoneActive = false;
         _collection = c;
         _lifecycle!.applyFromProfile(c.selected!);
         _reanchorCreatureForGrowth();
@@ -485,6 +520,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   void _onLifeChanged() {
     if (!mounted || !_petMode || _lifecycle == null) return;
+    _sleepRock?.setSleeping(_lifecycle!.sleeping && !_lifecycle!.isDead);
     if (_lifecycle!.isDead && !_stoppedForDeath) {
       _stoppedForDeath = true;
       _moveTimer?.cancel();
@@ -493,9 +529,49 @@ class _HomeScreenState extends State<HomeScreen>
       _foodTimer = null;
       _frameAnim?.stop();
       _sensors?.dispose();
+    } else if (!_lifecycle!.isDead) {
+      if (_lifecycle!.sleeping) {
+        _moveTimer?.cancel();
+        _moveTimer = null;
+      } else {
+        _ensureMoveTimerRunning();
+      }
     }
-    setState(_syncGrid);
+    setState(() {
+      if (_lifecycle!.sleeping || _lifecycle!.isDead) {
+        _caressZoneActive = false;
+      }
+      _syncGrid();
+    });
     _schedulePersist();
+  }
+
+  void _scheduleMoveTick() {
+    _moveTimer?.cancel();
+    if (!_petMode || _lifecycle == null) return;
+    final LifecycleService life = _lifecycle!;
+    if (life.isDead || life.sleeping) return;
+    final int ms = _moveIntervalMsForEnergy(life.energy);
+    _moveTimer = Timer(Duration(milliseconds: ms), _onMoveTimerFired);
+  }
+
+  void _onMoveTimerFired() {
+    if (!mounted || _lifecycle == null) return;
+    final LifecycleService life = _lifecycle!;
+    if (life.isDead || life.sleeping) return;
+    setState(() {
+      _randomStep();
+      _syncGrid();
+    });
+    _scheduleMoveTick();
+  }
+
+  void _ensureMoveTimerRunning() {
+    if (!_petMode || _lifecycle == null) return;
+    final LifecycleService life = _lifecycle!;
+    if (life.isDead || life.sleeping) return;
+    if (_moveTimer != null && _moveTimer!.isActive) return;
+    _scheduleMoveTick();
   }
 
   void _schedulePersist() {
@@ -641,6 +717,8 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   void dispose() {
+    _sleepRock?.dispose();
+    _sleepRock = null;
     _persistDebounce?.cancel();
     final BitiProfile? s = _selected;
     if (_petMode && _lifecycle != null && s != null) {
@@ -694,6 +772,16 @@ class _HomeScreenState extends State<HomeScreen>
     HapticFeedback.lightImpact();
   }
 
+  void _onCenterTerrainFromPanel() {
+    if (!_petMode || _lifecycle == null) return;
+    final BuildContext? ctx = _terrainSquareKey.currentContext;
+    if (ctx == null) return;
+    final RenderObject? ro = ctx.findRenderObject();
+    if (ro is! RenderBox || !ro.hasSize) return;
+    final double side = ro.size.width;
+    _centerTerrainCameraOnSelectedBiti(side);
+  }
+
   Widget _buildNoBitiScaffold(BuildContext context) {
     final BitiThemePair pair = BitiThemePair.presets[0];
     return AnimatedContainer(
@@ -743,13 +831,10 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
                 const SizedBox(height: 12),
                 OutlinedButton.icon(
-                  onPressed: () async {
-                    await BitiStorage.addNewBiti();
-                    final BitiCollection c = await BitiStorage.loadCollection();
-                    if (!context.mounted) return;
+                  onPressed: () {
                     Navigator.of(context).pushReplacement(
                       MaterialPageRoute<void>(
-                        builder: (_) => HomeScreen(initialCollection: c),
+                        builder: (_) => const FirstBitiScreen(),
                       ),
                     );
                   },
@@ -842,6 +927,18 @@ class _HomeScreenState extends State<HomeScreen>
     final Color trackBg = uiPair.trackBackground;
     final Color panel = uiPair.panel;
 
+    /// Boutons réduire / centrer dans l’encadré infos (nettement plus petits que la barre du bas).
+    final double infoActionTile = (_actionButtonSide(context) * 0.36).clamp(
+      22.0,
+      30.0,
+    );
+    final bool caressReady =
+        _caressZoneActive && !life.sleeping && !life.isDead;
+    final Color statusZoneFill = caressReady
+        ? Color.lerp(uiPair.mix(0.16), uiPair.barAccent, 0.38) ??
+              uiPair.mix(0.16)
+        : uiPair.mix(0.16);
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 280),
       color: uiPair.screenBackground,
@@ -890,55 +987,41 @@ class _HomeScreenState extends State<HomeScreen>
                                             child: Transform.scale(
                                               scale: scaleCover,
                                               child: SizedBox(
+                                                key: _terrainSquareKey,
                                                 width: side,
                                                 height: side,
                                                 child: InteractiveViewer(
                                                   transformationController: tc,
-                                                  minScale: 0.7,
+                                                  minScale: 0.5,
                                                   maxScale: 5.0,
                                                   boundaryMargin:
-                                                      EdgeInsets.all(
-                                                        side * 1.5,
+                                                      EdgeInsets.only(
+                                                        left: side * 0.15,
+                                                        right: side * 0.15,
+                                                        top: side * 0.08,
+                                                        bottom: side * 0.01,
                                                       ),
-                                                  clipBehavior: Clip.hardEdge,
-                                                  child: SizedBox(
-                                                    width: side,
-                                                    height: side,
-                                                    child: PixelGrid(
-                                                      model: _grid,
-                                                      theme: uiPair,
-                                                      boardBitis:
-                                                          _boardBitisForPixelGrid(),
-                                                      nameLabelColor: fgMuted,
-                                                      onCellTap: _onCellTap,
+                                                  child: FittedBox(
+                                                    fit: BoxFit.fitHeight,
+
+                                                    child: Container(
+                                                      //    color: Colors.red,
+                                                      width: side,
+                                                      height: side,
+                                                      child: PixelGrid(
+                                                        model: _grid,
+                                                        theme: uiPair,
+                                                        boardBitis:
+                                                            _boardBitisForPixelGrid(),
+                                                        nameLabelColor: fgMuted,
+                                                        onCellTap: _onCellTap,
+                                                      ),
                                                     ),
                                                   ),
                                                 ),
                                               ),
                                             ),
                                           ),
-                                        ),
-                                      ),
-                                    ),
-                                    Positioned(
-                                      right: 6,
-                                      bottom: 6,
-                                      child: Material(
-                                        color: panel.withValues(alpha: 0.92),
-                                        elevation: 3,
-                                        shadowColor: Colors.black45,
-                                        shape: const CircleBorder(),
-                                        child: IconButton(
-                                          tooltip: 'Centrer sur Biti',
-                                          visualDensity: VisualDensity.compact,
-                                          icon: Icon(
-                                            Icons.center_focus_strong_rounded,
-                                            color: fg,
-                                          ),
-                                          onPressed: () =>
-                                              _centerTerrainCameraOnSelectedBiti(
-                                                side,
-                                              ),
                                         ),
                                       ),
                                     ),
@@ -962,142 +1045,346 @@ class _HomeScreenState extends State<HomeScreen>
                         child: Stack(
                           clipBehavior: Clip.none,
                           children: <Widget>[
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(
-                                12,
-                                14,
-                                12,
-                                14,
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: <Widget>[
-                                  Padding(
-                                    padding: const EdgeInsets.only(right: 40),
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: <Widget>[
-                                        if (_selectedIsMainBiti) ...<Widget>[
-                                          Icon(
-                                            Icons.home_rounded,
-                                            size: 22,
-                                            color: fg.withValues(alpha: 0.92),
-                                          ),
-                                          const SizedBox(width: 8),
-                                        ],
-                                        Flexible(
-                                          child: Text(
-                                            life.name.toUpperCase(),
-                                            textAlign: TextAlign.center,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .headlineSmall
-                                                ?.copyWith(
-                                                  color: fg,
-                                                  fontWeight: FontWeight.w700,
-                                                  letterSpacing: 0.4,
+                            AnimatedSize(
+                              duration: const Duration(milliseconds: 260),
+                              curve: Curves.fastOutSlowIn,
+                              alignment: Alignment.topCenter,
+                              child: _infoPanelCompact
+                                  ? Padding(
+                                      padding: const EdgeInsets.fromLTRB(
+                                        6,
+                                        8,
+                                        6,
+                                        8,
+                                      ),
+                                      child: Padding(
+                                        padding: EdgeInsets.only(
+                                          right: _collection.profiles.length > 1
+                                              ? 40
+                                              : 0,
+                                        ),
+                                        child: Row(
+                                          children: <Widget>[
+                                            if (_selectedIsMainBiti) ...<
+                                              Widget
+                                            >[
+                                              Icon(
+                                                Icons.home_rounded,
+                                                size: 20,
+                                                color: fg.withValues(
+                                                  alpha: 0.92,
                                                 ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 14),
-                                  Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: <Widget>[
-                                      Expanded(
-                                        child: _LevelGaugeColumn(
-                                          level: displayGrowthLevel,
-                                          fill: displayGrowthLevel >= 6
-                                              ? 1.0
-                                              : levelFill,
-                                          labelColor: fgMuted,
-                                          trackBackgroundColor: trackBg,
-                                          barColor: uiPair.barAccent,
-                                        ),
-                                      ),
-                                      Expanded(
-                                        child: StatBar(
-                                          label: 'FAIM',
-                                          value: life.hunger,
-                                          color: uiPair.barSecondary(0.04),
-                                          labelColor: fgMuted,
-                                          trackBackgroundColor: trackBg,
-                                          compactColumn: true,
-                                        ),
-                                      ),
-                                      Expanded(
-                                        child: StatBar(
-                                          label: 'ÉNERGIE',
-                                          value: life.energy,
-                                          color: uiPair.barSecondary(-0.06),
-                                          labelColor: fgMuted,
-                                          trackBackgroundColor: trackBg,
-                                          compactColumn: true,
-                                        ),
-                                      ),
-                                      Expanded(
-                                        child: StatBar(
-                                          label: 'HUMEUR',
-                                          value: life.mood,
-                                          color: uiPair.barSecondary(0.1),
-                                          labelColor: fgMuted,
-                                          trackBackgroundColor: trackBg,
-                                          compactColumn: true,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 12),
-                                  DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      color: uiPair.mix(0.16),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 10,
-                                        horizontal: 12,
-                                      ),
-                                      child: Text(
-                                        _bitiStatusLabel(mood).toUpperCase(),
-                                        textAlign: TextAlign.center,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleSmall
-                                            ?.copyWith(
-                                              color: fg,
-                                              fontWeight: FontWeight.w600,
-                                              letterSpacing: 0.5,
+                                              ),
+                                              const SizedBox(width: 6),
+                                            ],
+                                            Expanded(
+                                              child: Row(
+                                                children: <Widget>[
+                                                  Expanded(
+                                                    child: Text(
+                                                      life.name.toUpperCase(),
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style: Theme.of(context)
+                                                          .textTheme
+                                                          .titleMedium
+                                                          ?.copyWith(
+                                                            color: fg,
+                                                            fontWeight:
+                                                                FontWeight.w700,
+                                                            letterSpacing: 0.3,
+                                                          ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 6),
+                                                  Text(
+                                                    'F${life.hunger} · E${life.energy} · M${life.mood}',
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: Theme.of(context)
+                                                        .textTheme
+                                                        .labelMedium
+                                                        ?.copyWith(
+                                                          color: fgMuted,
+                                                          fontFeatures:
+                                                              const <
+                                                                FontFeature
+                                                              >[
+                                                                FontFeature.tabularFigures(),
+                                                              ],
+                                                        ),
+                                                  ),
+                                                ],
+                                              ),
                                             ),
+                                            const SizedBox(width: 8),
+                                            _SquareAction(
+                                              size: infoActionTile,
+                                              panelColor: panel,
+                                              foreground: fg,
+                                              icon: Icons.unfold_more_rounded,
+                                              semanticLabel:
+                                                  'Agrandir les infos',
+                                              onTap: () => setState(
+                                                () => _infoPanelCompact = false,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            _SquareAction(
+                                              size: infoActionTile,
+                                              panelColor: panel,
+                                              foreground: fg,
+                                              icon: Icons
+                                                  .center_focus_strong_rounded,
+                                              semanticLabel: 'Centrer sur Biti',
+                                              onTap: _onCenterTerrainFromPanel,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    )
+                                  : Padding(
+                                      padding: const EdgeInsets.fromLTRB(
+                                        12,
+                                        14,
+                                        12,
+                                        14,
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: <Widget>[
+                                          Padding(
+                                            padding: EdgeInsets.only(
+                                              right:
+                                                  _collection.profiles.length >
+                                                      1
+                                                  ? 40
+                                                  : 0,
+                                            ),
+                                            child: Row(
+                                              children: <Widget>[
+                                                if (_selectedIsMainBiti) ...<
+                                                  Widget
+                                                >[
+                                                  Icon(
+                                                    Icons.home_rounded,
+                                                    size: 22,
+                                                    color: fg.withValues(
+                                                      alpha: 0.92,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                ],
+                                                Expanded(
+                                                  child: Text(
+                                                    life.name.toUpperCase(),
+                                                    textAlign: TextAlign.center,
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: Theme.of(context)
+                                                        .textTheme
+                                                        .headlineSmall
+                                                        ?.copyWith(
+                                                          color: fg,
+                                                          fontWeight:
+                                                              FontWeight.w700,
+                                                          letterSpacing: 0.4,
+                                                        ),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                _SquareAction(
+                                                  size: infoActionTile,
+                                                  panelColor: panel,
+                                                  foreground: fg,
+                                                  icon:
+                                                      Icons.unfold_less_rounded,
+                                                  semanticLabel:
+                                                      'Réduire les infos',
+                                                  onTap: () => setState(() {
+                                                    _infoPanelCompact = true;
+                                                    _caressZoneActive = false;
+                                                  }),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                _SquareAction(
+                                                  size: infoActionTile,
+                                                  panelColor: panel,
+                                                  foreground: fg,
+                                                  icon: Icons
+                                                      .center_focus_strong_rounded,
+                                                  semanticLabel:
+                                                      'Centrer sur Biti',
+                                                  onTap:
+                                                      _onCenterTerrainFromPanel,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(height: 14),
+                                          Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: <Widget>[
+                                              Expanded(
+                                                child: _LevelGaugeColumn(
+                                                  level: displayGrowthLevel,
+                                                  fill:
+                                                      displayGrowthLevel >=
+                                                          CreatureGrowth
+                                                              .maxGrowthLevel
+                                                      ? 1.0
+                                                      : levelFill,
+                                                  labelColor: fgMuted,
+                                                  trackBackgroundColor: trackBg,
+                                                  barColor: uiPair.barAccent,
+                                                ),
+                                              ),
+                                              Expanded(
+                                                child: StatBar(
+                                                  label: 'FAIM',
+                                                  value: life.hunger,
+                                                  color: uiPair.barSecondary(
+                                                    0.04,
+                                                  ),
+                                                  labelColor: fgMuted,
+                                                  trackBackgroundColor: trackBg,
+                                                  compactColumn: true,
+                                                ),
+                                              ),
+                                              Expanded(
+                                                child: StatBar(
+                                                  label: 'ÉNERGIE',
+                                                  value: life.energy,
+                                                  color: uiPair.barSecondary(
+                                                    -0.06,
+                                                  ),
+                                                  labelColor: fgMuted,
+                                                  trackBackgroundColor: trackBg,
+                                                  compactColumn: true,
+                                                ),
+                                              ),
+                                              Expanded(
+                                                child: StatBar(
+                                                  label: 'HUMEUR',
+                                                  value: life.mood,
+                                                  color: uiPair.barSecondary(
+                                                    0.1,
+                                                  ),
+                                                  labelColor: fgMuted,
+                                                  trackBackgroundColor: trackBg,
+                                                  compactColumn: true,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 12),
+                                          DecoratedBox(
+                                            decoration: BoxDecoration(
+                                              color: statusZoneFill,
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              border: caressReady
+                                                  ? Border.all(
+                                                      color: uiPair.barAccent
+                                                          .withValues(
+                                                            alpha: 0.65,
+                                                          ),
+                                                      width: 1.8,
+                                                    )
+                                                  : null,
+                                            ),
+                                            child: caressReady
+                                                ? GestureDetector(
+                                                    behavior:
+                                                        HitTestBehavior.opaque,
+                                                    onPanStart:
+                                                        _onCaressPanStart,
+                                                    onPanUpdate:
+                                                        _onCaressPanUpdate,
+                                                    onPanEnd: _onCaressPanEnd,
+                                                    onPanCancel:
+                                                        _onCaressPanCancel,
+                                                    child: Padding(
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            vertical: 10,
+                                                            horizontal: 12,
+                                                          ),
+                                                      child: Text(
+                                                        _bitiStatusLabel(
+                                                          mood,
+                                                        ).toUpperCase(),
+                                                        textAlign:
+                                                            TextAlign.center,
+                                                        maxLines: 3,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                        style: Theme.of(context)
+                                                            .textTheme
+                                                            .titleSmall
+                                                            ?.copyWith(
+                                                              color: fg,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w600,
+                                                              letterSpacing:
+                                                                  0.5,
+                                                            ),
+                                                      ),
+                                                    ),
+                                                  )
+                                                : Padding(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          vertical: 10,
+                                                          horizontal: 12,
+                                                        ),
+                                                    child: Text(
+                                                      _bitiStatusLabel(
+                                                        mood,
+                                                      ).toUpperCase(),
+                                                      textAlign:
+                                                          TextAlign.center,
+                                                      maxLines: 3,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style: Theme.of(context)
+                                                          .textTheme
+                                                          .titleSmall
+                                                          ?.copyWith(
+                                                            color: fg,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                            letterSpacing: 0.5,
+                                                          ),
+                                                    ),
+                                                  ),
+                                          ),
+                                        ],
                                       ),
                                     ),
+                            ),
+                            if (_collection.profiles.length > 1)
+                              Positioned(
+                                top: 2,
+                                right: 2,
+                                child: IconButton(
+                                  tooltip: 'Changer de Biti',
+                                  visualDensity: VisualDensity.compact,
+                                  style: IconButton.styleFrom(
+                                    foregroundColor: fg,
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
                                   ),
-                                ],
-                              ),
-                            ),
-                            Positioned(
-                              top: 2,
-                              right: 2,
-                              child: IconButton(
-                                tooltip: 'Changer de Biti',
-                                visualDensity: VisualDensity.compact,
-                                style: IconButton.styleFrom(
-                                  foregroundColor: fg,
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
+                                  onPressed: () => _showBitiPicker(context),
+                                  icon: const Icon(Icons.swap_horiz_rounded),
                                 ),
-                                onPressed: () => _showBitiPicker(context),
-                                icon: const Icon(Icons.swap_horiz_rounded),
                               ),
-                            ),
                           ],
                         ),
                       ),
@@ -1112,6 +1399,31 @@ class _HomeScreenState extends State<HomeScreen>
                         onSleep: life.sleep,
                         onSettings: () => _showSettings(context),
                         sleeping: life.sleeping,
+                        caressActive: _caressZoneActive,
+                        caressUsable: !life.isDead && !life.sleeping,
+                        caressPanelColor: _caressZoneActive
+                            ? Color.lerp(
+                                    panel,
+                                    uiPair.barAccent.withValues(alpha: 0.38),
+                                    0.55,
+                                  ) ??
+                                  panel
+                            : panel,
+                        onCaress: life.isDead
+                            ? null
+                            : () {
+                                if (life.sleeping) return;
+                                setState(() {
+                                  _caressZoneActive = !_caressZoneActive;
+                                });
+                              },
+                        caressTooltip: life.isDead
+                            ? null
+                            : life.sleeping
+                            ? 'Réveille Biti pour utiliser la caresse'
+                            : _caressZoneActive
+                            ? 'Glisse sur la zone d’état sous les jauges'
+                            : 'Caresser : active le mode puis glisse sur la zone d’état',
                       ),
                     ),
                   ],
@@ -1127,14 +1439,59 @@ class _HomeScreenState extends State<HomeScreen>
   double _actionButtonSide(BuildContext context) {
     final double w = MediaQuery.sizeOf(context).width - 32;
     const double gap = 8.0;
-    final double raw = (w - 2 * gap) / 3;
-    return raw.clamp(52, 76);
+    final double raw = (w - 3 * gap) / 4;
+    return raw.clamp(48, 72);
+  }
+
+  void _onCaressPanStart(DragStartDetails details) {
+    _caressDistAccum = 0;
+    if (_caressZoneActive) {
+      HapticFeedback.lightImpact();
+    }
+  }
+
+  void _onCaressPanUpdate(DragUpdateDetails details) {
+    if (!_caressZoneActive || _lifecycle == null) return;
+    if (_lifecycle!.isDead || _lifecycle!.sleeping) return;
+    _caressDistAccum += details.delta.distance;
+    const double segment = 14;
+    while (_caressDistAccum >= segment) {
+      _caressDistAccum -= segment;
+      final DateTime now = DateTime.now();
+      if (_lastCaressVibrateAt == null ||
+          now.difference(_lastCaressVibrateAt!) >=
+              const Duration(milliseconds: 85)) {
+        _lastCaressVibrateAt = now;
+        HapticFeedback.selectionClick();
+      }
+      _lifecycle!.registerCaressStroke();
+    }
+  }
+
+  void _onCaressPanEnd(DragEndDetails details) {
+    _caressDistAccum = 0;
+  }
+
+  void _onCaressPanCancel() {
+    _caressDistAccum = 0;
   }
 
   /// Libellé d’état (faim, sommeil, fatigue, humeur…) pour l’encadré sous le terrain.
   String _bitiStatusLabel(CreatureMood mood) {
     final LifecycleService life = _lifecycle!;
-    if (life.sleeping) return 'Endormi';
+    if (life.sleeping) {
+      switch (_sleepGuide) {
+        case SleepRockGuide.rockTooSlow:
+          return 'Berce un peu plus (trop lent)';
+        case SleepRockGuide.rockTooFast:
+          return 'Plus doucement (trop rapide)';
+        case SleepRockGuide.rockGood:
+          return 'Parfait — énergie remonte';
+      }
+    }
+    if (_caressZoneActive && !life.isDead) {
+      return 'Caressez';
+    }
     if (mood == CreatureMood.excited) return 'Excité';
     if (mood == CreatureMood.hungry) return 'Affamé';
     if (mood == CreatureMood.happy) return 'Heureux';
@@ -1150,26 +1507,33 @@ class _HomeScreenState extends State<HomeScreen>
         title: const Text('Aide'),
         content: SingleChildScrollView(
           child: Text(
-            'Biti évolue avec le temps : la faim, l’énergie et l’humeur changent '
-            'toutes les quelques secondes.\n\n'
+            'Biti évolue avec le temps : la **faim** baisse toutes les quelques '
+            'secondes ; l’**énergie** et l’**humeur** baissent beaucoup plus '
+            'lentement (environ **12 h** pour parcourir toute la jauge sans les '
+            'recharger).\n\n'
             '• Jouer : coûte de l’énergie mais remonte l’humeur ; secouer le '
             'téléphone déclenche aussi une partie.\n'
-            '• Dormir : récupère de l’énergie tant que Biti dort.\n'
-            '• Paramètres : **palette** pour les deux couleurs du sprite Biti sur la '
-            'grille, nom de Biti, et cette aide. L’ambiance de l’écran utilise la '
-            'combinaison 1.\n\n'
+            '• Dormir : berce doucement le téléphone de gauche à droite (gyroscope) : '
+            'l’énergie remonte jusqu’à +2 par seconde si le rythme est bon ; la barre '
+            'd’état indique trop lent / trop rapide / parfait.\n'
+            '• Caresse : touche l’icône main dans la barre du bas pour activer le mode, '
+            'puis glisse le doigt sur la zone d’état (sous les jauges) : le téléphone '
+            'vibre et l’humeur remonte peu à peu.\n'
+            '• Paramètres : cette aide et le transfert Bluetooth.\n\n'
             'Les vibrations rythment comme un pouls : plus l’énergie est basse, '
             'plus le rythme ralentit.\n\n'
             'Sur le **terrain** : pince avec deux doigts pour zoomer (jusqu’à ×4), '
             'glisse pour te déplacer quand tu es zoomé.\n\n'
             'Les points verts sont de la nourriture : appuie dessus pour la '
             'récolter (ça remonte un peu la faim et donne +${CreatureGrowth.xpPerFoodAction} XP).\n\n'
-            'La **taille** de Biti suit des **niveaux** selon l’XP : +${CreatureGrowth.xpPerSecondWhenAlive} '
-            'XP par seconde tant qu’il est vivant. Paliers cumulés : niveau 2 à '
-            '${CreatureGrowth.xpLevelStarts[1]} XP, 3 à ${CreatureGrowth.xpLevelStarts[2]}, '
-            '4 à ${CreatureGrowth.xpLevelStarts[3]}, 5 à ${CreatureGrowth.xpLevelStarts[4]}, '
-            '6 à ${CreatureGrowth.xpLevelStarts[5]} (puis taille max). La jauge '
-            'verte = progression vers le prochain niveau.\n\n'
+            'La **taille** de Biti suit **${CreatureGrowth.maxGrowthLevel} niveaux** '
+            'selon l’XP : +${CreatureGrowth.xpPerSecondWhenAlive} XP par seconde tant '
+            'qu’il est vivant. Paliers (XP cumulée) : par ex. niveau 2 à '
+            '${CreatureGrowth.xpLevelStarts[1]} XP, niveau 6 à '
+            '${CreatureGrowth.xpLevelStarts[5]} XP, niveau ${CreatureGrowth.maxGrowthLevel} '
+            'à partir de ${CreatureGrowth.xpLevelStarts[CreatureGrowth.maxGrowthLevel - 1]} '
+            'XP (sprite et terrain au maximum). La jauge verte = progression vers le '
+            'prochain niveau.\n\n'
             'Si une jauge reste trop basse (sous le seuil critique) sans '
             'interruption pendant au moins ${_deathDurationLabel(bitiDeathAfterCriticalLowStreak)}, '
             'Biti meurt. Il n’y a pas de recommencer dans l’app : ferme-la '
@@ -1188,8 +1552,6 @@ class _HomeScreenState extends State<HomeScreen>
 
   void _showSettings(BuildContext context) {
     if (!_petMode || _lifecycle == null) return;
-    final BitiProfile? sel = _selected;
-    if (sel == null) return;
     final BitiThemePair chrome = _uiPair();
     showModalBottomSheet<void>(
       context: context,
@@ -1199,32 +1561,10 @@ class _HomeScreenState extends State<HomeScreen>
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
       builder: (BuildContext ctx) => _BitiSettingsSheet(
-        profile: sel,
-        isMainBiti: _selectedIsMainBiti,
-        lifecycle: _lifecycle!,
-        onSpriteColorsSelected: (int a, int b) {
-          final BitiProfile? cur = _selected;
-          if (cur == null) return;
-          final BitiProfile u = cur.copyWith(
-            customColorA: a,
-            customColorB: b,
-            themePresetIndex: 0,
-          );
-          unawaited(() async {
-            await BitiStorage.upsertProfile(u);
-            if (!mounted) return;
-            final BitiCollection c = await BitiStorage.loadCollection();
-            if (mounted) {
-              setState(() => _collection = c);
-              unawaited(_refreshMainBitiProfileId());
-            }
-          }());
-        },
         onShowHelp: () {
           Navigator.pop(ctx);
           _showHelp(context);
         },
-        onNameSaved: _schedulePersist,
         onOpenTransfer: () {
           Navigator.pop(ctx);
           _showBitiTransferSheet(context);
@@ -1342,8 +1682,7 @@ class _HomeScreenState extends State<HomeScreen>
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'L’envoi inclut le profil (dont la teinte du personnage sur '
-                          'la grille définie dans Paramètres).',
+                          'L’envoi inclut le profil (stats et apparence enregistrées).',
                           style: Theme.of(sheetCtx).textTheme.bodySmall
                               ?.copyWith(color: Colors.white54, height: 1.35),
                         ),
@@ -1416,7 +1755,7 @@ class _LevelGaugeColumn extends StatelessWidget {
   }
 }
 
-/// Barre d’actions carrées (Jouer, Dormir, Paramètres).
+/// Barre d’actions carrées (Jouer, Dormir, Caresse, Paramètres).
 class _BitiActionBar extends StatelessWidget {
   const _BitiActionBar({
     required this.buttonSide,
@@ -1426,6 +1765,11 @@ class _BitiActionBar extends StatelessWidget {
     required this.onSleep,
     required this.onSettings,
     required this.sleeping,
+    required this.caressActive,
+    required this.caressUsable,
+    required this.caressPanelColor,
+    this.onCaress,
+    this.caressTooltip,
   });
 
   final double buttonSide;
@@ -1435,10 +1779,18 @@ class _BitiActionBar extends StatelessWidget {
   final VoidCallback onSleep;
   final VoidCallback onSettings;
   final bool sleeping;
+  final bool caressActive;
+  final bool caressUsable;
+  final Color caressPanelColor;
+  final VoidCallback? onCaress;
+  final String? caressTooltip;
 
   @override
   Widget build(BuildContext context) {
     const double gap = 8.0;
+    final Color caressFg = caressUsable
+        ? foreground
+        : foreground.withValues(alpha: 0.35);
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: <Widget>[
@@ -1462,6 +1814,17 @@ class _BitiActionBar extends StatelessWidget {
         const SizedBox(width: gap),
         _SquareAction(
           size: buttonSide,
+          panelColor: caressPanelColor,
+          foreground: caressFg,
+          icon: Icons.front_hand_rounded,
+          semanticLabel: caressActive ? 'Caresse (actif)' : 'Caresse',
+          tooltip: caressTooltip,
+          enabled: onCaress != null && caressUsable,
+          onTap: caressUsable ? onCaress : null,
+        ),
+        const SizedBox(width: gap),
+        _SquareAction(
+          size: buttonSide,
           panelColor: panelColor,
           foreground: foreground,
           icon: Icons.settings_rounded,
@@ -1480,7 +1843,9 @@ class _SquareAction extends StatelessWidget {
     required this.foreground,
     required this.icon,
     required this.semanticLabel,
-    required this.onTap,
+    this.onTap,
+    this.tooltip,
+    this.enabled = true,
   });
 
   final double size;
@@ -1488,20 +1853,24 @@ class _SquareAction extends StatelessWidget {
   final Color foreground;
   final IconData icon;
   final String semanticLabel;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final String? tooltip;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
-    final double iconSize = (size * 0.48).clamp(24.0, 34.0);
-    return Semantics(
+    final double iconSize = (size * 0.48).clamp(22.0, 32.0);
+    final bool tappable = enabled && onTap != null;
+    Widget child = Semantics(
       button: true,
+      enabled: tappable,
       label: semanticLabel,
       child: Material(
         color: panelColor,
         borderRadius: BorderRadius.circular(10),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: onTap,
+          onTap: tappable ? onTap : null,
           child: SizedBox(
             width: size,
             height: size,
@@ -1512,180 +1881,22 @@ class _SquareAction extends StatelessWidget {
         ),
       ),
     );
+    final String? tip = tooltip;
+    if (tip != null && tip.isNotEmpty) {
+      child = Tooltip(message: tip, child: child);
+    }
+    return child;
   }
 }
 
-/// Palette étendue pour la teinte du sprite (HSV + gris + accents).
-List<Color> _spriteTintPalette() {
-  final Set<int> seen = <int>{};
-  final List<Color> out = <Color>[];
-  void add(Color c) {
-    final int k = c.toARGB32();
-    if (seen.add(k)) {
-      out.add(c);
-    }
-  }
-
-  for (int i = 0; i <= 24; i++) {
-    add(Color.lerp(const Color(0xFF121212), const Color(0xFFF8F8F8), i / 24)!);
-  }
-  for (double h = 0; h < 360; h += 15) {
-    for (final double s in <double>[0.32, 0.52, 0.72, 0.9, 1.0]) {
-      for (final double v in <double>[0.42, 0.6, 0.78, 0.92, 1.0]) {
-        add(HSVColor.fromAHSV(1.0, h, s, v).toColor());
-      }
-    }
-  }
-  const List<Color> accents = <Color>[
-    Color(0xFF5F27CD),
-    Color(0xFFE17055),
-    Color(0xFF00B894),
-    Color(0xFFFDCB6E),
-    Color(0xFF0984E3),
-    Color(0xFFD63031),
-    Color(0xFF6C5CE7),
-    Color(0xFFFD79A8),
-    Color(0xFF00CEC9),
-    Color(0xFFE84393),
-    Color(0xFF8E44AD),
-    Color(0xFFF39C12),
-    Color(0xFF1ABC9C),
-    Color(0xFF34495E),
-    Color(0xFF00B4D8),
-    Color(0xFFFF6B6B),
-    Color(0xFF2ECC71),
-  ];
-  for (final Color c in accents) {
-    add(c);
-  }
-  return out;
-}
-
-class _BitiSettingsSheet extends StatefulWidget {
+class _BitiSettingsSheet extends StatelessWidget {
   const _BitiSettingsSheet({
-    required this.profile,
-    required this.isMainBiti,
-    required this.lifecycle,
-    required this.onSpriteColorsSelected,
     required this.onShowHelp,
-    required this.onNameSaved,
     required this.onOpenTransfer,
   });
 
-  final BitiProfile profile;
-  final bool isMainBiti;
-  final LifecycleService lifecycle;
-  final void Function(int a, int b) onSpriteColorsSelected;
   final VoidCallback onShowHelp;
-  final VoidCallback onNameSaved;
   final VoidCallback onOpenTransfer;
-
-  @override
-  State<_BitiSettingsSheet> createState() => _BitiSettingsSheetState();
-}
-
-class _BitiSettingsSheetState extends State<_BitiSettingsSheet> {
-  late TextEditingController _nameCtrl;
-  late int _colorA;
-  late int _colorB;
-
-  @override
-  void initState() {
-    super.initState();
-    final BitiThemePair pair = BitiThemePair.pairFor(widget.profile);
-    _colorA = pair.a.toARGB32();
-    _colorB = pair.b.toARGB32();
-    _nameCtrl = TextEditingController(text: widget.lifecycle.name);
-  }
-
-  @override
-  void dispose() {
-    _nameCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<int?> _openTintColorPicker(
-    BuildContext context, {
-    required int currentArgb,
-    required String title,
-  }) {
-    final List<Color> palette = _spriteTintPalette();
-    return showDialog<int>(
-      context: context,
-      builder: (BuildContext ctx) {
-        return AlertDialog(
-          title: Text(title),
-          content: SizedBox(
-            width: 320,
-            height: 420,
-            child: GridView.builder(
-              padding: EdgeInsets.zero,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 8,
-                mainAxisSpacing: 5,
-                crossAxisSpacing: 5,
-                childAspectRatio: 1,
-              ),
-              itemCount: palette.length,
-              itemBuilder: (BuildContext _, int i) {
-                final Color c = palette[i];
-                final bool sel = c.toARGB32() == currentArgb;
-                return Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    customBorder: const CircleBorder(),
-                    onTap: () => Navigator.pop(ctx, c.toARGB32()),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: c,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: sel ? Colors.white : Colors.white24,
-                          width: sel ? 2.5 : 1,
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Annuler'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _pickColor(BuildContext context, {required bool forA}) async {
-    final int? picked = await _openTintColorPicker(
-      context,
-      currentArgb: forA ? _colorA : _colorB,
-      title: forA ? 'Couleur claire (A)' : 'Couleur foncée (B)',
-    );
-    if (picked == null || !mounted) return;
-    setState(() {
-      if (forA) {
-        _colorA = picked;
-      } else {
-        _colorB = picked;
-      }
-    });
-    widget.onSpriteColorsSelected(_colorA, _colorB);
-  }
-
-  void _resetSpriteColorsToDefault() {
-    final BitiThemePair d = BitiThemePair.presets[0];
-    setState(() {
-      _colorA = d.a.toARGB32();
-      _colorB = d.b.toARGB32();
-    });
-    widget.onSpriteColorsSelected(_colorA, _colorB);
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -1731,7 +1942,7 @@ class _BitiSettingsSheetState extends State<_BitiSettingsSheet> {
                   leading: const Icon(Icons.help_outline, color: sheetMuted),
                   title: Text('Aide', style: TextStyle(color: sheetFg)),
                   trailing: const Icon(Icons.chevron_right, color: sheetMuted),
-                  onTap: widget.onShowHelp,
+                  onTap: onShowHelp,
                 ),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
@@ -1747,135 +1958,7 @@ class _BitiSettingsSheetState extends State<_BitiSettingsSheet> {
                     ).textTheme.bodySmall?.copyWith(color: sheetMuted),
                   ),
                   trailing: const Icon(Icons.chevron_right, color: sheetMuted),
-                  onTap: widget.onOpenTransfer,
-                ),
-                const Divider(color: Colors.white24),
-                const SizedBox(height: 6),
-                Row(
-                  children: <Widget>[
-                    Text(
-                      'Nom de Biti',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.titleSmall?.copyWith(color: sheetFg),
-                    ),
-                    if (widget.isMainBiti) ...<Widget>[
-                      const SizedBox(width: 8),
-                      Tooltip(
-                        message: 'Ton Biti principal (celui créé avec l’app)',
-                        child: Icon(
-                          Icons.home_rounded,
-                          size: 20,
-                          color: sheetFg.withValues(alpha: 0.85),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 6),
-                TextField(
-                  controller: _nameCtrl,
-                  style: TextStyle(color: sheetFg),
-                  cursorColor: sheetFg,
-                  decoration: InputDecoration(
-                    filled: true,
-                    fillColor: Colors.black.withValues(alpha: 0.22),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: Colors.white24),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(
-                        color: sheetFg.withValues(alpha: 0.6),
-                      ),
-                    ),
-                  ),
-                  textCapitalization: TextCapitalization.words,
-                  onSubmitted: (String s) {
-                    widget.lifecycle.setName(s);
-                    widget.onNameSaved();
-                    FocusScope.of(context).unfocus();
-                  },
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Valide avec Entrée pour enregistrer le nom.',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: sheetMuted),
-                ),
-                const SizedBox(height: 18),
-                Text(
-                  'Couleurs du sprite (grille)',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(color: sheetFg),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Choisis deux teintes (A = clair, B = foncé) dans la palette : elles '
-                  'définissent le dégradé du Biti sur le terrain uniquement. '
-                  'Enregistrées sur ce profil et envoyées par Bluetooth.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: sheetMuted,
-                    height: 1.35,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  height: 40,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.white24),
-                    gradient: LinearGradient(
-                      colors: <Color>[Color(_colorA), Color(_colorB)],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => _pickColor(context, forA: true),
-                        icon: Container(
-                          width: 22,
-                          height: 22,
-                          decoration: BoxDecoration(
-                            color: Color(_colorA),
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white38),
-                          ),
-                        ),
-                        label: const Text('Couleur A'),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => _pickColor(context, forA: false),
-                        icon: Container(
-                          width: 22,
-                          height: 22,
-                          decoration: BoxDecoration(
-                            color: Color(_colorB),
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white38),
-                          ),
-                        ),
-                        label: const Text('Couleur B'),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                TextButton(
-                  onPressed: _resetSpriteColorsToDefault,
-                  child: const Text('Réinitialiser (combinaison 1)'),
+                  onTap: onOpenTransfer,
                 ),
               ],
             ),
