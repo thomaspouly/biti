@@ -25,6 +25,7 @@ import '../theme/biti_theme_pair.dart';
 import '../widgets/biti_transfer_button.dart';
 import '../widgets/pixel_grid.dart';
 import '../widgets/stat_bar.dart';
+import 'biti_level_up_screen.dart';
 import 'first_biti_screen.dart';
 
 String _deathDurationLabel(Duration d) {
@@ -179,6 +180,53 @@ class _HomeScreenState extends State<HomeScreen>
       maxLv = max(maxLv, _lifecycle!.growthLevel);
     }
     return maxLv;
+  }
+
+  /// Niveau max des **autres** profils (terrain commun sans le Biti sélectionné).
+  int _maxLevelAmongOtherProfiles(String selectedId) {
+    int m = 1;
+    for (final BitiProfile p in _collection.profiles) {
+      if (p.id == selectedId) continue;
+      m = max(m, CreatureGrowth.levelFromXp(p.xp));
+    }
+    return m;
+  }
+
+  void _openBitiLevelUpCelebration(int fromLevel, int toLevel) {
+    final BitiProfile? s = _selected;
+    final LifecycleService? life = _lifecycle;
+    if (s == null || life == null || !mounted) return;
+
+    final int maxOther = _maxLevelAmongOtherProfiles(s.id);
+    final int maxBefore = max(maxOther, fromLevel);
+    final int maxAfter = max(maxOther, toLevel);
+    final int oldSide = CreatureGrowth.terrainSideForLevel(maxBefore);
+    final int newSide = CreatureGrowth.terrainSideForLevel(maxAfter);
+    final bool terrainGrew = newSide > oldSide;
+
+    final int oldSpan = CreatureGrowth.gridSpanForLevel(fromLevel);
+    final int newSpan = CreatureGrowth.gridSpanForLevel(toLevel);
+    final bool spanChanged = newSpan != oldSpan;
+
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (BuildContext ctx) => BitiLevelUpScreen(
+          newLevel: toLevel,
+          previousLevel: fromLevel,
+          bitiName: life.name,
+          themePair: BitiThemePair.pairFor(s),
+          mood: life.derivedMood,
+          frameIndex: _selectedCreature.frameIndex,
+          terrainOldSide: oldSide,
+          terrainNewSide: newSide,
+          terrainGrew: terrainGrew,
+          oldSpriteSpan: oldSpan,
+          newSpriteSpan: newSpan,
+          spriteSpanChanged: spanChanged,
+        ),
+      ),
+    );
   }
 
   (int, int) _slotForIndex(int index, int sw, int sh, int gw, int gh) {
@@ -717,10 +765,19 @@ class _HomeScreenState extends State<HomeScreen>
       c.clampToGrid(_grid.width, _grid.height);
     }
 
-    if (life.growthLevel > _lastGrowthLevel) {
+    final int prevTracked = _lastGrowthLevel;
+    final int nowLevel = life.growthLevel;
+    if (nowLevel > prevTracked) {
       HapticFeedback.mediumImpact();
+      final int fromLvl = prevTracked;
+      final int toLvl = nowLevel;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _lifecycle == null || _selected == null) return;
+        if (_lifecycle!.growthLevel < toLvl) return;
+        _openBitiLevelUpCelebration(fromLvl, toLvl);
+      });
     }
-    _lastGrowthLevel = life.growthLevel;
+    _lastGrowthLevel = nowLevel;
 
     final List<String> stampIds = <String>[
       for (final String id in sortedIds)
@@ -728,8 +785,9 @@ class _HomeScreenState extends State<HomeScreen>
       sel.id,
     ];
 
-    final List<({int x, int y, List<List<Color>> frame})> stamps =
-        <({int x, int y, List<List<Color>> frame})>[];
+    final List<({int x, int y, List<List<Color>> frame, BitiThemePair theme})>
+    stamps =
+        <({int x, int y, List<List<Color>> frame, BitiThemePair theme})>[];
     for (final String id in stampIds) {
       final Creature c = _creaturesById[id]!;
       final BitiProfile p = _collection.profiles.firstWhere(
@@ -747,7 +805,12 @@ class _HomeScreenState extends State<HomeScreen>
         fi,
         gl,
       );
-      stamps.add((x: c.gridX, y: c.gridY, frame: frame));
+      stamps.add((
+        x: c.gridX,
+        y: c.gridY,
+        frame: frame,
+        theme: BitiThemePair.pairFor(p),
+      ));
     }
 
     _grid.syncMultiCreatureFootprints(stamps);
@@ -1521,14 +1584,16 @@ class _HomeScreenState extends State<HomeScreen>
                                     ),
                                     child: Row(
                                       children: <Widget>[
-                                        if (_selectedIsMainBiti) ...<Widget>[
-                                          Icon(
-                                            Icons.home_rounded,
-                                            size: 22,
-                                            color: fg.withValues(alpha: 0.92),
-                                          ),
-                                          const SizedBox(width: 8),
-                                        ],
+                                        if (_selectedIsMainBiti &&
+                                            _collection.profiles.length > 1)
+                                          ...<Widget>[
+                                            Icon(
+                                              Icons.home_rounded,
+                                              size: 22,
+                                              color: fg.withValues(alpha: 0.92),
+                                            ),
+                                            const SizedBox(width: 8),
+                                          ],
                                         Expanded(
                                           child: Text(
                                             life.name.toUpperCase(),

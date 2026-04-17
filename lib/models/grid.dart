@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/biti_theme_pair.dart';
+
 /// Fraction du côté de case laissée vide autour du carreau (ex. `0.07` = **7 %** de chaque côté).
 const double gameBoardCellPaddingRatio = 0.07;
 
@@ -118,6 +120,7 @@ class PixelGridModel {
     int originX,
     int originY,
     List<List<Color>> frame,
+    BitiThemePair theme,
   ) {
     for (int fy = 0; fy < frame.length; fy++) {
       final List<Color> row = frame[fy];
@@ -130,7 +133,10 @@ class PixelGridModel {
           final GridCell existing = cells[gy][gx];
           if (existing.kind == CellKind.filled) continue;
           if (existing.kind == CellKind.food) continue;
-          cells[gy][gx] = GridCell(color: pixel, kind: CellKind.creature);
+          cells[gy][gx] = GridCell(
+            color: theme.mapSpritePixelColor(pixel),
+            kind: CellKind.creature,
+          );
         }
       }
     }
@@ -141,9 +147,10 @@ class PixelGridModel {
     int originX,
     int originY,
     List<List<Color>> frame,
+    BitiThemePair theme,
   ) {
     clearCreatureCells();
-    _stampCreatureFootprint(originX, originY, frame);
+    _stampCreatureFootprint(originX, originY, frame, theme);
     _bump();
   }
 
@@ -152,23 +159,26 @@ class PixelGridModel {
     int aX,
     int aY,
     List<List<Color>> aFrame,
+    BitiThemePair themeA,
     int bX,
     int bY,
     List<List<Color>> bFrame,
+    BitiThemePair themeB,
   ) {
     clearCreatureCells();
-    _stampCreatureFootprint(aX, aY, aFrame);
-    _stampCreatureFootprint(bX, bY, bFrame);
+    _stampCreatureFootprint(aX, aY, aFrame, themeA);
+    _stampCreatureFootprint(bX, bY, bFrame, themeB);
     _bump();
   }
 
   /// Plusieurs Biti sur le même terrain (l’ordre des empreintes compte : la dernière domine en cas de chevauchement).
   void syncMultiCreatureFootprints(
-    List<({int x, int y, List<List<Color>> frame})> stamps,
+    List<({int x, int y, List<List<Color>> frame, BitiThemePair theme})> stamps,
   ) {
     clearCreatureCells();
-    for (final ({int x, int y, List<List<Color>> frame}) s in stamps) {
-      _stampCreatureFootprint(s.x, s.y, s.frame);
+    for (final ({int x, int y, List<List<Color>> frame, BitiThemePair theme}) s
+        in stamps) {
+      _stampCreatureFootprint(s.x, s.y, s.frame, s.theme);
     }
     _bump();
   }

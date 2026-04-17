@@ -27,12 +27,6 @@ class CreaturePainter extends CustomPainter {
   final double lean;
   final BitiThemePair theme;
 
-  static Color _remapPixel(Color c, BitiThemePair t) {
-    if (c.a == 0) return c;
-    final double lum = c.computeLuminance().clamp(0.0, 1.0);
-    return t.mix(0.12 + lum * 0.78);
-  }
-
   @override
   void paint(Canvas canvas, Size size) {
     if (frame.isEmpty) return;
@@ -68,7 +62,7 @@ class CreaturePainter extends CustomPainter {
           innerW + 0.5,
           innerH + 0.5,
         );
-        final Paint paint = Paint()..color = _remapPixel(color, theme);
+        final Paint paint = Paint()..color = theme.mapSpritePixelColor(color);
         canvas.drawRect(rect, paint);
       }
     }

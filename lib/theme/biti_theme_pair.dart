@@ -40,6 +40,15 @@ class BitiThemePair {
   /// Fond plein de l’écran de jeu (sans dégradé).
   Color get screenBackground => mix(0.08);
 
+  /// Couleur d’affichage d’un pixel de sprite sur le **terrain** (cases grille).
+  ///
+  /// Même logique que l’ancien rendu overlay : luminance du pixel source → segment [a]→[b].
+  Color mapSpritePixelColor(Color c) {
+    if (c.a == 0) return c;
+    final double lum = c.computeLuminance().clamp(0.0, 1.0);
+    return mix(0.12 + lum * 0.78);
+  }
+
   /// Fond de la feuille paramètres (proche de l’extrémité sombre pour texte clair).
   Color get sheetBackground => mix(_aIsLighter ? 0.9 : 0.14);
 

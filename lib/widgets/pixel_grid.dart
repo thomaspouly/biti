@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import '../models/creature.dart';
 import '../models/grid.dart';
 import '../theme/biti_theme_pair.dart';
-import 'creature_painter.dart';
 
 /// Rayon de recherche en cases autour du tap.
 const int _tapSearchRadiusCells = 4;
@@ -83,9 +82,9 @@ class PixelGridBoardBiti {
   return (gx0, gy0);
 }
 
-/// Grille pixel + créatures, rendue avec [CustomPainter] (performant).
+/// Grille pixel + créatures : le corps est peint dans les **cases** du modèle ([CellKind.creature]).
 ///
-/// [boardBitis] : ordre de peinture ; en général le Biti sélectionné en **dernier** pour passer au-dessus.
+/// [boardBitis] sert au contour sélectionné et aux libellés (pas de calque sprite séparé).
 class PixelGrid extends StatelessWidget {
   const PixelGrid({
     super.key,
@@ -143,22 +142,6 @@ class PixelGrid extends StatelessWidget {
                 pendingFoodDarkGy: pendingFoodDarkGy,
               ),
             ),
-            for (final PixelGridBoardBiti b in boardBitis)
-              CustomPaint(
-                painter: CreaturePainter(
-                  frame: CreatureSpriteLibrary.currentFrame(
-                    b.mood,
-                    b.creature.frameIndex,
-                    b.growthLevel,
-                  ),
-                  gridWidth: model.width,
-                  gridHeight: model.height,
-                  creatureX: b.creature.gridX,
-                  creatureY: b.creature.gridY,
-                  lean: b.lean,
-                  theme: b.creatureTheme,
-                ),
-              ),
             CustomPaint(
               painter: _WalkTrailPainter(
                 gridWidth: model.width,
@@ -294,7 +277,7 @@ class _BoardBitiNameLabel extends StatelessWidget {
   }
 }
 
-/// Trajet balade au-dessus des sprites pour rester bien visible.
+/// Trajet balade au-dessus du terrain (cases créature comprises).
 class _WalkTrailPainter extends CustomPainter {
   _WalkTrailPainter({
     required this.gridWidth,
@@ -420,6 +403,17 @@ class PixelGridPainter extends CustomPainter {
           paint.color = foodPendingDark ? theme.mix(0.66) : theme.mix(0.36);
           final double r = math.min(rCell.width, rCell.height) * 0.38;
           canvas.drawCircle(rCell.center, r, paint);
+        } else if (cell.kind == CellKind.creature) {
+          paint.color = cell.color;
+          canvas.drawRRect(rRCell, paint);
+          if (tapHere) {
+            paint
+              ..color = theme.mix(0.45).withValues(alpha: 0.5)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 2;
+            canvas.drawRRect(rRCell, paint);
+            paint.style = PaintingStyle.fill;
+          }
         } else if (cell.kind == CellKind.filled) {
           paint.color = theme.mix(0.88);
           canvas.drawRRect(rRCell, paint);
