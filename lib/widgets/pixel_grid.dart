@@ -84,7 +84,7 @@ class PixelGridBoardBiti {
 
 /// Grille pixel + créatures : le corps est peint dans les **cases** du modèle ([CellKind.creature]).
 ///
-/// [boardBitis] sert au contour sélectionné et aux libellés (pas de calque sprite séparé).
+/// [boardBitis] sert au contour sélectionné et aux libellés (noms masqués s’il n’y a qu’un Biti).
 class PixelGrid extends StatelessWidget {
   const PixelGrid({
     super.key,
@@ -156,14 +156,15 @@ class PixelGrid extends StatelessWidget {
                   cellW: cellW,
                   cellH: cellH,
                 ),
-            for (final PixelGridBoardBiti b in boardBitis)
-              _BoardBitiNameLabel(
-                name: b.name,
-                creature: b.creature,
-                cellW: cellW,
-                cellH: cellH,
-                color: nameLabelColor,
-              ),
+            if (boardBitis.length > 1)
+              for (final PixelGridBoardBiti b in boardBitis)
+                _BoardBitiNameLabel(
+                  name: b.name,
+                  creature: b.creature,
+                  cellW: cellW,
+                  cellH: cellH,
+                  color: nameLabelColor,
+                ),
             if (onCellTap != null)
               Positioned.fill(
                 child: GestureDetector(
@@ -206,12 +207,10 @@ class _SelectedBitiOutline extends StatelessWidget {
   Widget build(BuildContext context) {
     final double padX = cellW * gameBoardCellPaddingRatio;
     final double padY = cellH * gameBoardCellPaddingRatio;
-    final double innerW = cellW - 2 * padX;
-    final double innerH = cellH - 2 * padY;
     final double left = creature.gridX * cellW + padX;
     final double top = creature.gridY * cellH + padY;
-    final double w = creature.spriteWidth * innerW;
-    final double h = creature.spriteHeight * innerH;
+    final double w = creature.spriteWidth * cellW - 2 * padX + 0.5;
+    final double h = creature.spriteHeight * cellH - 2 * padY + 0.5;
 
     /// Espace entre le sprite et le trait rouge (px écran).
     final double gap = (math.min(cellW, cellH) * 0.3).clamp(2.0, 5.0);

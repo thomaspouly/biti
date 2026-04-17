@@ -1,4 +1,6 @@
-/// Croissance de Biti : **XP** cumulée → niveaux (voir [xpLevelStarts], [maxGrowthLevel]).
+import '../services/conway_pattern_catalog.dart';
+
+/// Croissance de Biti : **XP** cumulée → niveaux **0 … maxGrowthLevel** (voir [xpLevelStarts]).
 class CreatureGrowth {
   CreatureGrowth._();
 
@@ -8,81 +10,63 @@ class CreatureGrowth {
   /// XP pour **Nourrir** (bouton) ou **récolter** un point vert sur la grille.
   static const int xpPerFoodAction = 5;
 
-  /// Nombre de niveaux (= longueur de [xpLevelStarts]).
-  static int get maxGrowthLevel => xpLevelStarts.length;
+  /// Plus grand indice de niveau (**0** = un pixel, sans GoL ; **≥ 1** = oscillateur du JSON).
+  static int get maxGrowthLevel {
+    if (!BitiConwayPatterns.isLoaded) return 0;
+    return BitiConwayPatterns.instance.maxGameLevel;
+  }
 
-  /// XP cumulée **minimale** pour être au niveau donné (index = niveau − 1).
-  ///
-  /// Paliers progressifs (résumé) : montée jusqu’au niveau [maxGrowthLevel] ;
-  /// les derniers niveaux demandent plus d’XP cumulée.
-  static const List<int> xpLevelStarts = <int>[
-    0,
-    700,
-    3000,
-    6000,
-    12000,
-    24000,
-    42000,
-    65000,
-    95000,
-    135000,
-  ];
+  /// Nombre de paliers XP (= [maxGrowthLevel] + 1).
+  static int get levelSlotCount {
+    if (!BitiConwayPatterns.isLoaded) return 1;
+    return BitiConwayPatterns.instance.xpThresholds.length;
+  }
 
-  /// Niveau entre **1** et [maxGrowthLevel] selon l’XP cumulée.
+  /// XP cumulée **minimale** pour être au niveau d’indice **i** (liste de longueur [levelSlotCount]).
+  static List<int> get xpLevelStarts {
+    if (!BitiConwayPatterns.isLoaded) return <int>[0];
+    return BitiConwayPatterns.instance.xpThresholds;
+  }
+
+  /// Niveau entre **0** et [maxGrowthLevel] selon l’XP cumulée.
   static int levelFromXp(int xp) {
+    if (!BitiConwayPatterns.isLoaded) return 0;
+    final List<int> starts = BitiConwayPatterns.instance.xpThresholds;
+    if (starts.isEmpty) return 0;
     final int x = xp < 0 ? 0 : xp;
-    int level = 1;
-    for (int i = 1; i < xpLevelStarts.length; i++) {
-      if (x >= xpLevelStarts[i]) {
-        level = i + 1;
+    int level = 0;
+    for (int i = 0; i < starts.length; i++) {
+      if (x >= starts[i]) {
+        level = i;
       }
     }
-    return level.clamp(1, maxGrowthLevel);
+    return level.clamp(0, maxGrowthLevel);
   }
 
-  /// Côté du sprite sur la grille (niveau 3 = 5×5, forme de référence).
+  /// Plus grand côté de la boîte du motif au niveau donné (niveau **0** → **1**).
   static int gridSpanForLevel(int level) {
-    const List<int> spans = <int>[
-      1,
-      2,
-      5,
-      7,
-      9,
-      11,
-      13,
-      15,
-      17,
-      19,
-    ];
-    return spans[level.clamp(1, maxGrowthLevel) - 1];
+    if (!BitiConwayPatterns.isLoaded) return 1;
+    final int lv = level.clamp(0, maxGrowthLevel);
+    return BitiConwayPatterns.instance.bboxMaxSideForGameLevel(lv);
   }
 
-  /// Taille du **terrain** (carré) en nombre de cases selon le niveau.
-  /// Niveau **1** : 30×30, puis **+4** cases par niveau.
+  /// Taille du **terrain** (carré) : max(bounding box) × **15** pour le niveau donné.
   static int terrainSideForLevel(int level) {
-    const List<int> sides = <int>[
-      30,
-      34,
-      38,
-      42,
-      46,
-      50,
-      54,
-      58,
-      62,
-      66,
-    ];
-    return sides[level.clamp(1, maxGrowthLevel) - 1];
+    final int span = gridSpanForLevel(level.clamp(0, maxGrowthLevel));
+    return (span * 15).clamp(12, 1 << 20);
   }
 
   /// Remplissage **0.0–1.0** du segment XP jusqu’au **prochain** niveau.
   /// Au dernier niveau, retourne **1.0**.
   static double levelFillProgressFromXp(int xp) {
+    if (!BitiConwayPatterns.isLoaded) return 1.0;
+    final List<int> starts = BitiConwayPatterns.instance.xpThresholds;
+    if (starts.length < 2) return 1.0;
     final int x = xp < 0 ? 0 : xp;
     final int lv = levelFromXp(x);
     if (lv >= maxGrowthLevel) return 1.0;
-    final int start = xpLevelStarts[lv - 1];
-    final int end = xpLevelStarts[lv];
+    final int start = starts[lv];
+    final int end = starts[lv + 1];
     if (end <= start) return 1.0;
     return ((x - start) / (end - start)).clamp(0.0, 1.0);
   }

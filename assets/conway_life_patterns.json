@@ -1,0 +1,32 @@
+[
+    {
+        "id": "1",
+        "name": "Blinker",
+        "period": 2,
+        "rle": "3o!"
+    },
+    {
+        "id": "2",
+        "name": "Beacon",
+        "period": 2,
+        "rle": "2o2b$o3b$3bo$2b2o!"
+    },
+    {
+        "id": "3",
+        "name": "Bipole",
+        "period": 2,
+        "rle": "2o3b$obo2b2$2bobo$3b2o!"
+    },
+    {
+        "id": "4",
+        "name": "Tripole",
+        "period": 2,
+        "rle": "2o4b$obo3b2$2bobob$5bo$4b2o!"
+    },
+    {
+        "id": "5",
+        "name": "Jam",
+        "period": 3,
+        "rle": "3b2ob$2bo2bo$o2bobo$o3bob$o5b$3bo2b$b2o!"
+    }
+]

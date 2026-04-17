@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../services/conway_pattern_catalog.dart';
+import '../theme/biti_theme_pair.dart';
 import 'creature_growth.dart';
 
 /// Humeur / état d’animation affiché (dérivé du [LifecycleService] + actions).
@@ -60,26 +62,32 @@ class CreatureSpriteLibrary {
     return builtIn[mood] ?? builtIn[CreatureMood.idle]!;
   }
 
-  /// [growthLevel] entre 1 et [CreatureGrowth.maxGrowthLevel].
+  static Color moodBodyColor(CreatureMood mood) => _moodBodyColor(mood);
+
+  /// [growthLevel] entre **0** et [CreatureGrowth.maxGrowthLevel].
+  ///
+  /// Niveau **0** : un pixel (pas de motif GoL). Niveaux **≥ 1** : silhouette initiale
+  /// du motif (oscillateur) colorée selon l’humeur — la simulation animée est gérée
+  /// dans [HomeScreen] pour le Biti sélectionné.
   static SpriteFrame currentFrame(
     CreatureMood mood,
     int index,
-    int growthLevel,
-  ) {
-    final int lv = growthLevel.clamp(1, CreatureGrowth.maxGrowthLevel);
-    final List<SpriteFrame> frames = framesFor(mood);
-    final SpriteFrame base = frames[index % frames.length];
-    final int span = CreatureGrowth.gridSpanForLevel(lv);
-    switch (lv) {
-      case 1:
-        return _level1Frame(base, mood);
-      case 2:
-        return _scaleNearest(base, 2, 2);
-      case 3:
-        return base;
-      default:
-        return _scaleNearest(base, span, span);
+    int growthLevel, {
+    BitiThemePair? patternTheme,
+  }) {
+    final int lv = growthLevel.clamp(0, CreatureGrowth.maxGrowthLevel);
+    if (lv == 0) {
+      final List<SpriteFrame> frames = framesFor(mood);
+      final SpriteFrame base = frames[index % frames.length];
+      return _level0Frame(base, mood);
     }
+    if (!BitiConwayPatterns.isLoaded) {
+      return <List<Color>>[<Color>[_moodBodyColor(mood)]];
+    }
+    final Color c = _moodBodyColor(mood);
+    final BitiThemePair t =
+        patternTheme ?? BitiThemePair(a: c, b: c);
+    return BitiConwayPatterns.instance.coloredInitialFrame(lv, t);
   }
 }
 
@@ -91,7 +99,7 @@ const Color _k = Color(0xFF2D3436);
 const Color _r = Color(0xFFE17055);
 const Color _y = Color(0xFFFDCB6E);
 
-SpriteFrame _level1Frame(SpriteFrame base, CreatureMood mood) {
+SpriteFrame _level0Frame(SpriteFrame base, CreatureMood mood) {
   final int cy = base.length ~/ 2;
   final int cx = base.first.length ~/ 2;
   final Color c = base[cy][cx];
@@ -116,20 +124,6 @@ Color _moodBodyColor(CreatureMood mood) {
     default:
       return _b;
   }
-}
-
-/// Agrandissement / réduction par voisin le plus proche (référence 5×5 → cible).
-SpriteFrame _scaleNearest(SpriteFrame src, int outW, int outH) {
-  if (src.isEmpty || src.first.isEmpty) return src;
-  final int sh = src.length;
-  final int sw = src.first.length;
-  return List<List<Color>>.generate(outH, (int y) {
-    return List<Color>.generate(outW, (int x) {
-      final int sy = (y * sh / outH).floor().clamp(0, sh - 1);
-      final int sx = (x * sw / outW).floor().clamp(0, sw - 1);
-      return src[sy][sx];
-    });
-  });
 }
 
 /// Sprites 5×5 (une lettre = un pixel de couleur, `.` = transparent).

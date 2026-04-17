@@ -17,6 +17,7 @@ class CreaturePainter extends CustomPainter {
     required this.creatureY,
     required this.lean,
     required this.theme,
+    this.directCellColors = false,
   });
 
   final List<List<Color>> frame;
@@ -26,6 +27,9 @@ class CreaturePainter extends CustomPainter {
   final int creatureY;
   final double lean;
   final BitiThemePair theme;
+
+  /// Si vrai, les couleurs de [frame] sont déjà finales (ex. corps GoL **b → a**).
+  final bool directCellColors;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -62,7 +66,8 @@ class CreaturePainter extends CustomPainter {
           innerW + 0.5,
           innerH + 0.5,
         );
-        final Paint paint = Paint()..color = theme.mapSpritePixelColor(color);
+        final Paint paint = Paint()
+          ..color = directCellColors ? color : theme.mapSpritePixelColor(color);
         canvas.drawRect(rect, paint);
       }
     }
@@ -78,6 +83,7 @@ class CreaturePainter extends CustomPainter {
         oldDelegate.lean != lean ||
         oldDelegate.gridWidth != gridWidth ||
         oldDelegate.gridHeight != gridHeight ||
-        oldDelegate.theme != theme;
+        oldDelegate.theme != theme ||
+        oldDelegate.directCellColors != directCellColors;
   }
 }

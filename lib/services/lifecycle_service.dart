@@ -94,7 +94,8 @@ class LifecycleService extends ChangeNotifier {
   bool get isDead => _dead;
 
   /// Niveau de taille dérivé de l’XP (voir [CreatureGrowth.maxGrowthLevel]).
-  int get growthLevel => CreatureGrowth.levelFromXp(xp);
+  //   int get growthLevel => CreatureGrowth.levelFromXp(xp);
+  int get growthLevel => 2;
 
   CreatureMood get derivedMood {
     if (_dead) return CreatureMood.idle;
@@ -182,14 +183,8 @@ class LifecycleService extends ChangeNotifier {
   /// Pas réels pendant une balade : humeur ↑, énergie ↓ (hors sommeil / mort).
   void applyWalkSessionSteps(int deltaSteps) {
     if (_dead || sleeping || deltaSteps <= 0) return;
-    final int moodAdd = min(
-      100 - mood,
-      (deltaSteps / 18).ceil().clamp(1, 45),
-    );
-    final int energySub = min(
-      energy,
-      (deltaSteps / 15).ceil().clamp(1, 55),
-    );
+    final int moodAdd = min(100 - mood, (deltaSteps / 18).ceil().clamp(1, 45));
+    final int energySub = min(energy, (deltaSteps / 15).ceil().clamp(1, 55));
     mood = min(100, mood + moodAdd);
     energy = max(0, energy - energySub);
     _checkCriticalStreakAfterUpdate();

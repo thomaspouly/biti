@@ -120,8 +120,9 @@ class PixelGridModel {
     int originX,
     int originY,
     List<List<Color>> frame,
-    BitiThemePair theme,
-  ) {
+    BitiThemePair theme, {
+    bool cellColorsAlreadyThemed = false,
+  }) {
     for (int fy = 0; fy < frame.length; fy++) {
       final List<Color> row = frame[fy];
       for (int fx = 0; fx < row.length; fx++) {
@@ -133,8 +134,11 @@ class PixelGridModel {
           final GridCell existing = cells[gy][gx];
           if (existing.kind == CellKind.filled) continue;
           if (existing.kind == CellKind.food) continue;
+          final Color out = cellColorsAlreadyThemed
+              ? pixel
+              : theme.mapSpritePixelColor(pixel);
           cells[gy][gx] = GridCell(
-            color: theme.mapSpritePixelColor(pixel),
+            color: out,
             kind: CellKind.creature,
           );
         }
@@ -173,12 +177,33 @@ class PixelGridModel {
 
   /// Plusieurs Biti sur le même terrain (l’ordre des empreintes compte : la dernière domine en cas de chevauchement).
   void syncMultiCreatureFootprints(
-    List<({int x, int y, List<List<Color>> frame, BitiThemePair theme})> stamps,
+    List<
+        ({
+          int x,
+          int y,
+          List<List<Color>> frame,
+          BitiThemePair theme,
+          bool cellColorsAlreadyThemed,
+        })> stamps,
   ) {
     clearCreatureCells();
-    for (final ({int x, int y, List<List<Color>> frame, BitiThemePair theme}) s
-        in stamps) {
-      _stampCreatureFootprint(s.x, s.y, s.frame, s.theme);
+    for (
+      final ({
+        int x,
+        int y,
+        List<List<Color>> frame,
+        BitiThemePair theme,
+        bool cellColorsAlreadyThemed,
+      }) s
+      in stamps
+    ) {
+      _stampCreatureFootprint(
+        s.x,
+        s.y,
+        s.frame,
+        s.theme,
+        cellColorsAlreadyThemed: s.cellColorsAlreadyThemed,
+      );
     }
     _bump();
   }

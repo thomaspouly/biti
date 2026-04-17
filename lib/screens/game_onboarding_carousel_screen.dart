@@ -82,13 +82,11 @@ class _GameOnboardingCarouselScreenState
       title: 'Niveaux et XP',
       body:
           'Biti gagne ${CreatureGrowth.xpPerSecondWhenAlive} XP par seconde tant qu’il '
-          'est vivant. Il existe ${CreatureGrowth.maxGrowthLevel} niveaux : par exemple '
-          'le niveau 2 à partir de ${CreatureGrowth.xpLevelStarts[1]} XP cumulée, le '
-          'niveau 6 à partir de ${CreatureGrowth.xpLevelStarts[5]} XP, et le dernier '
-          'niveau à partir de '
-          '${CreatureGrowth.xpLevelStarts[CreatureGrowth.maxGrowthLevel - 1]} XP. '
-          'La jauge verte « LVL » montre la progression vers le niveau suivant : '
-          'sprite et terrain grandissent avec les niveaux.',
+          'est vivant. Il existe ${CreatureGrowth.levelSlotCount} niveaux (de 0 à '
+          '${CreatureGrowth.maxGrowthLevel}) : le 0 est un seul pixel ; au-delà, '
+          'le corps suit des oscillateurs du jeu de la vie. Le dernier palier commence à '
+          '${CreatureGrowth.xpLevelStarts[CreatureGrowth.maxGrowthLevel]} XP cumulée. '
+          'La jauge verte « LVL » montre la progression ; le terrain grandit avec le niveau.',
     ),
     const _Slide(
       icon: Icons.vibration_rounded,

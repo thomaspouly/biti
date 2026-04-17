@@ -12,9 +12,12 @@ import 'package:permission_handler/permission_handler.dart';
 import '../bloc/biti_transfer_bloc.dart';
 import '../models/biti_collection.dart';
 import '../models/biti_profile.dart';
+import '../logic/conway_life_simulator.dart';
 import '../models/creature.dart';
 import '../models/creature_growth.dart';
+import '../models/conway_pattern.dart';
 import '../models/grid.dart';
+import '../services/conway_pattern_catalog.dart';
 import '../services/biti_storage.dart';
 import '../services/biti_transfer_service.dart';
 import '../services/heartbeat_vibration_service.dart';
@@ -114,7 +117,10 @@ class _HomeScreenState extends State<HomeScreen>
   double _caressDistAccum = 0;
   DateTime? _lastCaressVibrateAt;
 
-  int _lastGrowthLevel = 1;
+  int _lastGrowthLevel = 0;
+
+  ConwayLifeSimulator? _selectedGoL;
+  int _goLSimLevel = -1;
 
   /// [BitiProfile.id] du Biti principal (prefs), pour le badge dans l’espace info.
   String? _mainBitiProfileId;
@@ -172,7 +178,7 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   int _maxTerrainGrowthLevel() {
-    int maxLv = 1;
+    int maxLv = 0;
     for (final BitiProfile p in _collection.profiles) {
       maxLv = max(maxLv, CreatureGrowth.levelFromXp(p.xp));
     }
@@ -184,12 +190,64 @@ class _HomeScreenState extends State<HomeScreen>
 
   /// Niveau max des **autres** profils (terrain commun sans le Biti sélectionné).
   int _maxLevelAmongOtherProfiles(String selectedId) {
-    int m = 1;
+    int m = 0;
     for (final BitiProfile p in _collection.profiles) {
       if (p.id == selectedId) continue;
       m = max(m, CreatureGrowth.levelFromXp(p.xp));
     }
     return m;
+  }
+
+  void _updateFrameAnimDuration() {
+    if (_frameAnim == null || _lifecycle == null) return;
+    final int e = _lifecycle!.energy;
+    const int maxMs = 900;
+    const int minMs = 110;
+    final double t = e.clamp(0, 100) / 100.0;
+    final int ms = (maxMs - t * (maxMs - minMs)).round().clamp(minMs, maxMs);
+    _frameAnim!.duration = Duration(milliseconds: ms);
+  }
+
+  void _ensureSelectedGoL(LifecycleService life) {
+    final int gl = life.growthLevel;
+    if (gl <= 0) {
+      _selectedGoL = null;
+      _goLSimLevel = -1;
+      return;
+    }
+    final BitiConwayPattern? p = BitiConwayPatterns.instance.patternForGameLevel(
+      gl,
+    );
+    if (p == null) {
+      _selectedGoL = null;
+      _goLSimLevel = -1;
+      return;
+    }
+    if (_selectedGoL == null || _goLSimLevel != gl) {
+      _selectedGoL = ConwayLifeSimulator.fromPattern(p);
+      _goLSimLevel = gl;
+    }
+  }
+
+  SpriteFrame _spriteFrameForCreature({
+    required bool isSelected,
+    required int growthLevel,
+    required CreatureMood mood,
+    required int frameIndex,
+    required BitiThemePair patternTheme,
+  }) {
+    if (isSelected &&
+        growthLevel > 0 &&
+        _selectedGoL != null &&
+        _goLSimLevel == growthLevel) {
+      return _selectedGoL!.toSpriteFrame(patternTheme);
+    }
+    return CreatureSpriteLibrary.currentFrame(
+      mood,
+      frameIndex,
+      growthLevel,
+      patternTheme: patternTheme,
+    );
   }
 
   void _openBitiLevelUpCelebration(int fromLevel, int toLevel) {
@@ -266,6 +324,8 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   void _rebuildBoardPositions() {
+    if (!_petMode || _lifecycle == null) return;
+    _ensureSelectedGoL(_lifecycle!);
     final int side = _grid.width;
     final List<String> ids =
         _collection.profiles.map((BitiProfile p) => p.id).toList()..sort();
@@ -290,10 +350,12 @@ class _HomeScreenState extends State<HomeScreen>
       final CreatureMood m = sel != null && id == sel.id && _lifecycle != null
           ? _lifecycle!.derivedMood
           : _moodFromProfile(p);
-      final SpriteFrame fr = CreatureSpriteLibrary.currentFrame(
-        m,
-        id == sel?.id ? c.frameIndex : 0,
-        gl,
+      final SpriteFrame fr = _spriteFrameForCreature(
+        isSelected: sel != null && id == sel.id,
+        growthLevel: gl,
+        mood: m,
+        frameIndex: c.frameIndex,
+        patternTheme: BitiThemePair.pairFor(p),
       );
       c.spriteWidth = fr.first.length;
       c.spriteHeight = fr.length;
@@ -439,6 +501,7 @@ class _HomeScreenState extends State<HomeScreen>
       duration: const Duration(milliseconds: 420),
     );
     _frameAnim!.addStatusListener(_onFrameAnimStatus);
+    _updateFrameAnimDuration();
     _frameAnim!.forward();
 
     if (!_lifecycle!.sleeping && !_lifecycle!.isDead) {
@@ -656,6 +719,7 @@ class _HomeScreenState extends State<HomeScreen>
         _pendingFoodDarkGx = null;
         _pendingFoodDarkGy = null;
       }
+      _updateFrameAnimDuration();
       _syncGrid();
     });
     _schedulePersist();
@@ -711,10 +775,21 @@ class _HomeScreenState extends State<HomeScreen>
   void _onFrameAnimStatus(AnimationStatus status) {
     if (!_petMode || _lifecycle == null || _lifecycle!.isDead) return;
     if (status != AnimationStatus.completed || !mounted) return;
+    final LifecycleService life = _lifecycle!;
+    if (life.sleeping) {
+      _frameAnim?.forward(from: 0);
+      return;
+    }
+    _updateFrameAnimDuration();
     setState(() {
-      final CreatureMood mood = _lifecycle!.derivedMood;
-      final int n = CreatureSpriteLibrary.framesFor(mood).length;
-      _selectedCreature.advanceFrame(n);
+      final CreatureMood mood = life.derivedMood;
+      final int gl = life.growthLevel;
+      if (gl > 0 && _selectedGoL != null && _goLSimLevel == gl) {
+        _selectedGoL!.step();
+      } else {
+        final int n = CreatureSpriteLibrary.framesFor(mood).length;
+        _selectedCreature.advanceFrame(n);
+      }
       _syncGrid();
     });
     _frameAnim?.forward(from: 0);
@@ -726,6 +801,7 @@ class _HomeScreenState extends State<HomeScreen>
     if (sel == null) return;
 
     final LifecycleService life = _lifecycle!;
+    _ensureSelectedGoL(life);
     final int terrainSide = CreatureGrowth.terrainSideForLevel(
       _maxTerrainGrowthLevel(),
     );
@@ -745,19 +821,23 @@ class _HomeScreenState extends State<HomeScreen>
       );
       if (id == sel.id) {
         final CreatureMood mood = life.derivedMood;
-        final SpriteFrame frame = CreatureSpriteLibrary.currentFrame(
-          mood,
-          c.frameIndex,
-          life.growthLevel,
+        final SpriteFrame frame = _spriteFrameForCreature(
+          isSelected: true,
+          growthLevel: life.growthLevel,
+          mood: mood,
+          frameIndex: c.frameIndex,
+          patternTheme: BitiThemePair.pairFor(p),
         );
         c.spriteWidth = frame.first.length;
         c.spriteHeight = frame.length;
       } else {
         final CreatureMood mood = _moodFromProfile(p);
-        final SpriteFrame frame = CreatureSpriteLibrary.currentFrame(
-          mood,
-          0,
-          CreatureGrowth.levelFromXp(p.xp),
+        final SpriteFrame frame = _spriteFrameForCreature(
+          isSelected: false,
+          growthLevel: CreatureGrowth.levelFromXp(p.xp),
+          mood: mood,
+          frameIndex: 0,
+          patternTheme: BitiThemePair.pairFor(p),
         );
         c.spriteWidth = frame.first.length;
         c.spriteHeight = frame.length;
@@ -785,9 +865,20 @@ class _HomeScreenState extends State<HomeScreen>
       sel.id,
     ];
 
-    final List<({int x, int y, List<List<Color>> frame, BitiThemePair theme})>
-    stamps =
-        <({int x, int y, List<List<Color>> frame, BitiThemePair theme})>[];
+    final List<
+        ({
+          int x,
+          int y,
+          List<List<Color>> frame,
+          BitiThemePair theme,
+          bool cellColorsAlreadyThemed,
+        })> stamps = <({
+      int x,
+      int y,
+      List<List<Color>> frame,
+      BitiThemePair theme,
+      bool cellColorsAlreadyThemed,
+    })>[];
     for (final String id in stampIds) {
       final Creature c = _creaturesById[id]!;
       final BitiProfile p = _collection.profiles.firstWhere(
@@ -800,16 +891,19 @@ class _HomeScreenState extends State<HomeScreen>
           ? life.growthLevel
           : CreatureGrowth.levelFromXp(p.xp);
       final int fi = id == sel.id ? c.frameIndex : 0;
-      final SpriteFrame frame = CreatureSpriteLibrary.currentFrame(
-        mood,
-        fi,
-        gl,
+      final SpriteFrame frame = _spriteFrameForCreature(
+        isSelected: id == sel.id,
+        growthLevel: gl,
+        mood: mood,
+        frameIndex: fi,
+        patternTheme: BitiThemePair.pairFor(p),
       );
       stamps.add((
         x: c.gridX,
         y: c.gridY,
         frame: frame,
         theme: BitiThemePair.pairFor(p),
+        cellColorsAlreadyThemed: gl >= 1,
       ));
     }
 
@@ -859,10 +953,12 @@ class _HomeScreenState extends State<HomeScreen>
     if (!_petMode || _lifecycle == null || _lifecycle!.isDead) return;
     final LifecycleService life = _lifecycle!;
     final Creature c = _selectedCreature;
-    final SpriteFrame frame = CreatureSpriteLibrary.currentFrame(
-      life.derivedMood,
-      c.frameIndex,
-      life.growthLevel,
+    final SpriteFrame frame = _spriteFrameForCreature(
+      isSelected: true,
+      growthLevel: life.growthLevel,
+      mood: life.derivedMood,
+      frameIndex: c.frameIndex,
+      patternTheme: _creatureTintForSelected(),
     );
     final int? tx = _foodTargetGx;
     final int? ty = _foodTargetGy;
@@ -904,10 +1000,12 @@ class _HomeScreenState extends State<HomeScreen>
     }
     final LifecycleService life = _lifecycle!;
     final Creature c = _selectedCreature;
-    final SpriteFrame frame = CreatureSpriteLibrary.currentFrame(
-      life.derivedMood,
-      c.frameIndex,
-      life.growthLevel,
+    final SpriteFrame frame = _spriteFrameForCreature(
+      isSelected: true,
+      growthLevel: life.growthLevel,
+      mood: life.derivedMood,
+      frameIndex: c.frameIndex,
+      patternTheme: _creatureTintForSelected(),
     );
     if (_spriteCoversCell(c, frame, tx, ty)) {
       return;
@@ -972,10 +1070,12 @@ class _HomeScreenState extends State<HomeScreen>
     });
     final LifecycleService life = _lifecycle!;
     final Creature c = _selectedCreature;
-    final SpriteFrame frame = CreatureSpriteLibrary.currentFrame(
-      life.derivedMood,
-      c.frameIndex,
-      life.growthLevel,
+    final SpriteFrame frame = _spriteFrameForCreature(
+      isSelected: true,
+      growthLevel: life.growthLevel,
+      mood: life.derivedMood,
+      frameIndex: c.frameIndex,
+      patternTheme: _creatureTintForSelected(),
     );
     if (_spriteCoversCell(c, frame, gx, gy)) {
       if (_grid.collectFoodAt(gx, gy)) {
@@ -1959,14 +2059,13 @@ class _HomeScreenState extends State<HomeScreen>
             'glisse pour te déplacer quand tu es zoomé.\n\n'
             'Les points verts sont de la nourriture : appuie dessus pour la '
             'récolter (ça remonte un peu la faim et donne +${CreatureGrowth.xpPerFoodAction} XP).\n\n'
-            'La **taille** de Biti suit **${CreatureGrowth.maxGrowthLevel} niveaux** '
-            'selon l’XP : +${CreatureGrowth.xpPerSecondWhenAlive} XP par seconde tant '
-            'qu’il est vivant. Paliers (XP cumulée) : par ex. niveau 2 à '
-            '${CreatureGrowth.xpLevelStarts[1]} XP, niveau 6 à '
-            '${CreatureGrowth.xpLevelStarts[5]} XP, niveau ${CreatureGrowth.maxGrowthLevel} '
-            'à partir de ${CreatureGrowth.xpLevelStarts[CreatureGrowth.maxGrowthLevel - 1]} '
-            'XP (sprite et terrain au maximum). La jauge verte = progression vers le '
-            'prochain niveau.\n\n'
+            'Les **niveaux** vont de **0** (un pixel, sans simulation) à '
+            '**${CreatureGrowth.maxGrowthLevel}** (motifs oscillateurs du jeu de la vie). '
+            'L’XP monte de +${CreatureGrowth.xpPerSecondWhenAlive} par seconde tant que Biti '
+            'est vivant ; le dernier palier commence à '
+            '${CreatureGrowth.xpLevelStarts[CreatureGrowth.maxGrowthLevel]} XP cumulée. '
+            'Le terrain est un carré de **15 fois** le plus grand côté du motif du niveau. '
+            'La jauge verte = progression vers le prochain niveau.\n\n'
             'Si une jauge reste trop basse (sous le seuil critique) sans '
             'interruption pendant au moins ${_deathDurationLabel(bitiDeathAfterCriticalLowStreak)}, '
             'Biti meurt. Il n’y a pas de recommencer dans l’app : ferme-la '

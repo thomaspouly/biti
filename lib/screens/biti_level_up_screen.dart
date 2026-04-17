@@ -41,6 +41,7 @@ class BitiLevelUpScreen extends StatelessWidget {
       mood,
       frameIndex,
       newLevel,
+      patternTheme: themePair,
     );
     final int sw = frame.first.length;
     final int sh = frame.length;
@@ -103,6 +104,7 @@ class BitiLevelUpScreen extends StatelessWidget {
                             creatureY: cy,
                             lean: 0,
                             theme: themePair,
+                            directCellColors: newLevel >= 1,
                           ),
                         ),
                       ),

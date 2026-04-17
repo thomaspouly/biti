@@ -49,6 +49,20 @@ class BitiThemePair {
     return mix(0.12 + lum * 0.78);
   }
 
+  /// Cellule vivante du corps GoL : **0** = nouvelle, **1** = 1 génération, **2** = 2, **3+** = 3 ou plus.
+  ///
+  /// Dégradé **uniquement à partir de [a]** : plus **clair** quand la cellule est récente,
+  /// plus **foncé** quand elle est ancienne (valeur HSV décroissante avec l’âge).
+  Color creatureCellColorForSurvivalStreak(int streak) {
+    final double t = streak.clamp(0, 3) / 3.0;
+    final HSVColor h = HSVColor.fromColor(a);
+    final double vScale = 1.0 - 0.58 * t;
+    return h
+        .withValue((h.value * vScale).clamp(0.0, 1.0))
+        .toColor()
+        .withValues(alpha: a.a);
+  }
+
   /// Fond de la feuille paramètres (proche de l’extrémité sombre pour texte clair).
   Color get sheetBackground => mix(_aIsLighter ? 0.9 : 0.14);
 
