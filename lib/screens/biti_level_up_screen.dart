@@ -73,19 +73,19 @@ class BitiLevelUpScreen extends StatelessWidget {
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(
                     'Depuis le niveau $previousLevel',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: muted,
-                    ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: muted),
                   ),
                 ),
               const SizedBox(height: 8),
               Text(
                 bitiName,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: muted,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(color: muted),
               ),
-              const Spacer(flex: 1),
+              const Spacer(),
               AspectRatio(
                 aspectRatio: 1,
                 child: LayoutBuilder(
@@ -112,7 +112,7 @@ class BitiLevelUpScreen extends StatelessWidget {
                   },
                 ),
               ),
-              const Spacer(flex: 1),
+              const Spacer(),
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
@@ -215,10 +215,7 @@ class BitiLevelUpScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: TextStyle(color: muted, fontSize: 14),
-              ),
+              Text(subtitle, style: TextStyle(color: muted, fontSize: 14)),
             ],
           ),
         ),

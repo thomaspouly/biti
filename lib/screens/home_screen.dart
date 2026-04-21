@@ -10,16 +10,16 @@ import 'package:pedometer/pedometer.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../bloc/biti_transfer_bloc.dart';
+import '../logic/conway_life_simulator.dart';
 import '../models/biti_collection.dart';
 import '../models/biti_profile.dart';
-import '../logic/conway_life_simulator.dart';
+import '../models/conway_pattern.dart';
 import '../models/creature.dart';
 import '../models/creature_growth.dart';
-import '../models/conway_pattern.dart';
 import '../models/grid.dart';
-import '../services/conway_pattern_catalog.dart';
 import '../services/biti_storage.dart';
 import '../services/biti_transfer_service.dart';
+import '../services/conway_pattern_catalog.dart';
 import '../services/heartbeat_vibration_service.dart';
 import '../services/lifecycle_service.dart';
 import '../services/sensor_service.dart';
@@ -72,8 +72,11 @@ class _HomeScreenState extends State<HomeScreen>
 
   AnimationController? _frameAnim;
 
-  /// Zoom / pan du terrain (réinitialisable pour centrer sur le Biti).
+  /// Zoom / pan du terrain ; bouton info = bascule « suivre le Biti » ([_syncGrid] recadre la vue).
   TransformationController? _terrainViewController;
+
+  bool _terrainCameraFollowsBiti = false;
+  bool _terrainFollowPostFramePending = false;
 
   /// Repère le carré logique du terrain (côté [side] pour le recentrage caméra).
   final GlobalKey _terrainSquareKey = GlobalKey();
@@ -215,9 +218,8 @@ class _HomeScreenState extends State<HomeScreen>
       _goLSimLevel = -1;
       return;
     }
-    final BitiConwayPattern? p = BitiConwayPatterns.instance.patternForGameLevel(
-      gl,
-    );
+    final BitiConwayPattern? p = BitiConwayPatterns.instance
+        .patternForGameLevel(gl);
     if (p == null) {
       _selectedGoL = null;
       _goLSimLevel = -1;
@@ -287,7 +289,20 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  (int, int) _slotForIndex(int index, int sw, int sh, int gw, int gh) {
+  /// Coin haut-gauche du sprite pour le placer au **centre** du terrain (marges [clampToGrid]).
+  (int, int) _centeredTopLeftForSprite(int sw, int sh, int gw, int gh) {
+    final int minX = 1;
+    final int maxX = gw - sw - 1;
+    final int minY = 1;
+    final int maxY = gh - sh - 1;
+    if (maxX < minX || maxY < minY) {
+      return (max(0, minX), max(0, minY));
+    }
+    return ((minX + maxX) ~/ 2, (minY + maxY) ~/ 2);
+  }
+
+  /// Grille décalée depuis le coin (plusieurs Biti sur le même plateau).
+  (int, int) _cornerSlotForIndex(int index, int sw, int sh, int gw, int gh) {
     const int pad = 2;
     const int stepX = 14;
     const int stepY = 14;
@@ -338,6 +353,8 @@ class _HomeScreenState extends State<HomeScreen>
     _creaturesById.removeWhere((String k, _) => !ids.contains(k));
 
     final BitiProfile? sel = _selected;
+    final List<(Creature c, int gx, int gy, int sw, int sh)> placed =
+        <(Creature, int, int, int, int)>[];
     int i = 0;
     for (final String id in ids) {
       final Creature c = _creaturesById[id]!;
@@ -359,17 +376,42 @@ class _HomeScreenState extends State<HomeScreen>
       );
       c.spriteWidth = fr.first.length;
       c.spriteHeight = fr.length;
-      final (int gx, int gy) = _slotForIndex(
-        i,
-        c.spriteWidth,
-        c.spriteHeight,
-        side,
-        side,
-      );
-      c.gridX = gx;
-      c.gridY = gy;
-      c.clampToGrid(side, side);
+      final int sw = c.spriteWidth;
+      final int sh = c.spriteHeight;
+      final (int gx, int gy) = ids.length == 1
+          ? _centeredTopLeftForSprite(sw, sh, side, side)
+          : _cornerSlotForIndex(i, sw, sh, side, side);
+      placed.add((c, gx, gy, sw, sh));
       i++;
+    }
+
+    if (ids.length <= 1) {
+      for (final (Creature c, int gx, int gy, _, _) in placed) {
+        c.gridX = gx;
+        c.gridY = gy;
+        c.clampToGrid(side, side);
+      }
+      return;
+    }
+
+    int bboxMinX = side;
+    int bboxMinY = side;
+    int bboxMaxX = 0;
+    int bboxMaxY = 0;
+    for (final (_, int gx, int gy, int sw, int sh) in placed) {
+      bboxMinX = min(bboxMinX, gx);
+      bboxMinY = min(bboxMinY, gy);
+      bboxMaxX = max(bboxMaxX, gx + sw - 1);
+      bboxMaxY = max(bboxMaxY, gy + sh - 1);
+    }
+    final int midX = (bboxMinX + bboxMaxX) ~/ 2;
+    final int midY = (bboxMinY + bboxMaxY) ~/ 2;
+    final int offX = (side ~/ 2) - midX;
+    final int offY = (side ~/ 2) - midY;
+    for (final (Creature c, int gx, int gy, _, _) in placed) {
+      c.gridX = gx + offX;
+      c.gridY = gy + offY;
+      c.clampToGrid(side, side);
     }
   }
 
@@ -544,6 +586,7 @@ class _HomeScreenState extends State<HomeScreen>
     if (!mounted) return;
     final bool hadCaress = _caressZoneActive;
     setState(() {
+      _terrainCameraFollowsBiti = false;
       _caressZoneActive = false;
       _foodTargetGx = null;
       _foodTargetGy = null;
@@ -570,6 +613,7 @@ class _HomeScreenState extends State<HomeScreen>
       if (!mounted) return;
       final bool hadCaress = _caressZoneActive;
       setState(() {
+        _terrainCameraFollowsBiti = false;
         _caressZoneActive = false;
         _foodTargetGx = null;
         _foodTargetGy = null;
@@ -713,6 +757,7 @@ class _HomeScreenState extends State<HomeScreen>
     }
     setState(() {
       if (_lifecycle!.sleeping || _lifecycle!.isDead) {
+        _terrainCameraFollowsBiti = false;
         _caressZoneActive = false;
         _foodTargetGx = null;
         _foodTargetGy = null;
@@ -866,19 +911,24 @@ class _HomeScreenState extends State<HomeScreen>
     ];
 
     final List<
-        ({
-          int x,
-          int y,
-          List<List<Color>> frame,
-          BitiThemePair theme,
-          bool cellColorsAlreadyThemed,
-        })> stamps = <({
-      int x,
-      int y,
-      List<List<Color>> frame,
-      BitiThemePair theme,
-      bool cellColorsAlreadyThemed,
-    })>[];
+      ({
+        int x,
+        int y,
+        List<List<Color>> frame,
+        BitiThemePair theme,
+        bool cellColorsAlreadyThemed,
+      })
+    >
+    stamps =
+        <
+          ({
+            int x,
+            int y,
+            List<List<Color>> frame,
+            BitiThemePair theme,
+            bool cellColorsAlreadyThemed,
+          })
+        >[];
     for (final String id in stampIds) {
       final Creature c = _creaturesById[id]!;
       final BitiProfile p = _collection.profiles.firstWhere(
@@ -908,6 +958,20 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     _grid.syncMultiCreatureFootprints(stamps);
+    _scheduleTerrainFollowIfActive();
+  }
+
+  void _scheduleTerrainFollowIfActive() {
+    if (!_terrainCameraFollowsBiti) return;
+    if (_terrainFollowPostFramePending) return;
+    _terrainFollowPostFramePending = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _terrainFollowPostFramePending = false;
+      if (!mounted || !_terrainCameraFollowsBiti) return;
+      final LifecycleService? life = _lifecycle;
+      if (life == null || life.isDead || life.sleeping) return;
+      _runTerrainCameraFollowFrame(haptic: false);
+    });
   }
 
   void _randomStep() {
@@ -1362,7 +1426,10 @@ class _HomeScreenState extends State<HomeScreen>
     return Offset(cx, cy);
   }
 
-  void _centerTerrainCameraOnSelectedBiti(double side) {
+  void _applyTerrainCameraFocalOnSelectedBiti(
+    double side, {
+    bool haptic = false,
+  }) {
     final TransformationController? tc = _terrainViewController;
     if (tc == null || !_petMode || _lifecycle == null) return;
     final Offset focal = _selectedCreatureCenterInSidePixels(side);
@@ -1371,17 +1438,35 @@ class _HomeScreenState extends State<HomeScreen>
       ..translate(side * 0.5, side * 0.5)
       ..scale(s, s, 1.0)
       ..translate(-focal.dx, -focal.dy);
-    HapticFeedback.lightImpact();
+    if (haptic) {
+      HapticFeedback.lightImpact();
+    }
   }
 
-  void _onCenterTerrainFromPanel() {
-    if (!_petMode || _lifecycle == null) return;
+  void _runTerrainCameraFollowFrame({bool haptic = false}) {
     final BuildContext? ctx = _terrainSquareKey.currentContext;
     if (ctx == null) return;
     final RenderObject? ro = ctx.findRenderObject();
     if (ro is! RenderBox || !ro.hasSize) return;
     final double side = ro.size.width;
-    _centerTerrainCameraOnSelectedBiti(side);
+    _applyTerrainCameraFocalOnSelectedBiti(side, haptic: haptic);
+  }
+
+  void _toggleTerrainCameraFollow() {
+    if (!_petMode || _lifecycle == null || _lifecycle!.isDead) return;
+    if (_lifecycle!.sleeping) return;
+    final bool next = !_terrainCameraFollowsBiti;
+    setState(() {
+      _terrainCameraFollowsBiti = next;
+    });
+    if (next) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_terrainCameraFollowsBiti) return;
+        _runTerrainCameraFollowFrame(haptic: true);
+      });
+    } else {
+      HapticFeedback.selectionClick();
+    }
   }
 
   Widget _buildNoBitiScaffold(BuildContext context) {
@@ -1611,7 +1696,7 @@ class _HomeScreenState extends State<HomeScreen>
                                                   child: FittedBox(
                                                     fit: BoxFit.fitHeight,
 
-                                                    child: Container(
+                                                    child: SizedBox(
                                                       //    color: Colors.red,
                                                       width: side,
                                                       height: side,
@@ -1685,15 +1770,15 @@ class _HomeScreenState extends State<HomeScreen>
                                     child: Row(
                                       children: <Widget>[
                                         if (_selectedIsMainBiti &&
-                                            _collection.profiles.length > 1)
-                                          ...<Widget>[
-                                            Icon(
-                                              Icons.home_rounded,
-                                              size: 22,
-                                              color: fg.withValues(alpha: 0.92),
-                                            ),
-                                            const SizedBox(width: 8),
-                                          ],
+                                            _collection.profiles.length >
+                                                1) ...<Widget>[
+                                          Icon(
+                                            Icons.home_rounded,
+                                            size: 22,
+                                            color: fg.withValues(alpha: 0.92),
+                                          ),
+                                          const SizedBox(width: 8),
+                                        ],
                                         Expanded(
                                           child: Text(
                                             life.name.toUpperCase(),
@@ -1713,12 +1798,31 @@ class _HomeScreenState extends State<HomeScreen>
                                         const SizedBox(width: 8),
                                         _SquareAction(
                                           size: infoActionTile,
-                                          panelColor: panel,
-                                          foreground: fg,
-                                          icon:
-                                              Icons.center_focus_strong_rounded,
-                                          semanticLabel: 'Centrer sur Biti',
-                                          onTap: _onCenterTerrainFromPanel,
+                                          panelColor: _terrainCameraFollowsBiti
+                                              ? Color.lerp(
+                                                      panel,
+                                                      uiPair.barAccent,
+                                                      0.32,
+                                                    ) ??
+                                                    panel
+                                              : panel,
+                                          foreground: _terrainCameraFollowsBiti
+                                              ? uiPair.barAccent
+                                              : fg,
+                                          icon: _terrainCameraFollowsBiti
+                                              ? Icons.my_location_rounded
+                                              : Icons
+                                                    .center_focus_strong_rounded,
+                                          semanticLabel:
+                                              _terrainCameraFollowsBiti
+                                              ? 'Suivi caméra actif'
+                                              : 'Suivre le Biti avec la caméra',
+                                          tooltip: _terrainCameraFollowsBiti
+                                              ? 'Arrêter de suivre le Biti'
+                                              : 'Suivre le Biti (caméra)',
+                                          enabled:
+                                              !life.sleeping && !life.isDead,
+                                          onTap: _toggleTerrainCameraFollow,
                                         ),
                                       ],
                                     ),

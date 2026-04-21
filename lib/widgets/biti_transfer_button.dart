@@ -32,10 +32,7 @@ class BitiTransferActions extends StatelessWidget {
 }
 
 class _BitiTransferActionsBody extends StatelessWidget {
-  const _BitiTransferActionsBody({
-    required this.state,
-    required this.profile,
-  });
+  const _BitiTransferActionsBody({required this.state, required this.profile});
 
   final BitiTransferBlocState state;
   final BitiProfile? profile;
@@ -51,8 +48,8 @@ class _BitiTransferActionsBody extends StatelessWidget {
           Expanded(
             child: OutlinedButton.icon(
               onPressed: () => context.read<BitiTransferBloc>().add(
-                    const BitiTransferReceiveStarted(),
-                  ),
+                const BitiTransferReceiveStarted(),
+              ),
               icon: const Icon(Icons.download_rounded),
               label: const Text('Accueillir'),
             ),
@@ -65,8 +62,8 @@ class _BitiTransferActionsBody extends StatelessWidget {
                   : () {
                       final BitiProfile p = profile!;
                       context.read<BitiTransferBloc>().add(
-                            BitiTransferSendStarted(p),
-                          );
+                        BitiTransferSendStarted(p),
+                      );
                     },
               icon: const Icon(Icons.upload_rounded),
               label: const Text('Envoyer'),
@@ -77,8 +74,7 @@ class _BitiTransferActionsBody extends StatelessWidget {
     }
 
     if (p == BitiTransferPhase.searching) {
-      final bool receiving =
-          state.transferRole == BitiTransferUserRole.receive;
+      final bool receiving = state.transferRole == BitiTransferUserRole.receive;
       return _statusRow(
         child: const CircularProgressIndicator(strokeWidth: 2),
         text: receiving
@@ -109,14 +105,14 @@ class _BitiTransferActionsBody extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
-        children: [
+        children: <Widget>[
           LinearProgressIndicator(value: v > 0 ? v : null),
           const SizedBox(height: 8),
           Text('Envoi du Biti… $pct %'),
           TextButton(
             onPressed: () => context.read<BitiTransferBloc>().add(
-                  const BitiTransferCancelled(),
-                ),
+              const BitiTransferCancelled(),
+            ),
             child: const Text('Annuler'),
           ),
         ],
@@ -131,14 +127,14 @@ class _BitiTransferActionsBody extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
-        children: [
+        children: <Widget>[
           LinearProgressIndicator(value: v > 0 ? v : null),
           const SizedBox(height: 8),
           Text('Réception d’un Biti… $pct %'),
           TextButton(
             onPressed: () => context.read<BitiTransferBloc>().add(
-                  const BitiTransferCancelled(),
-                ),
+              const BitiTransferCancelled(),
+            ),
             child: const Text('Annuler'),
           ),
         ],
@@ -147,7 +143,7 @@ class _BitiTransferActionsBody extends StatelessWidget {
 
     if (p == BitiTransferPhase.success) {
       return Row(
-        children: [
+        children: <Widget>[
           Icon(Icons.check_circle, color: Colors.green.shade600),
           const SizedBox(width: 8),
           const Expanded(child: Text('Transfert réussi !')),
@@ -159,10 +155,10 @@ class _BitiTransferActionsBody extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
-        children: [
+        children: <Widget>[
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+            children: <Widget>[
               Icon(Icons.error_outline, color: Colors.red.shade600),
               const SizedBox(width: 8),
               Expanded(
@@ -177,15 +173,15 @@ class _BitiTransferActionsBody extends StatelessWidget {
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: [
+            children: <Widget>[
               TextButton(
                 onPressed: () => _openSettings(context),
                 child: const Text('Réglages'),
               ),
               OutlinedButton.icon(
                 onPressed: () => context.read<BitiTransferBloc>().add(
-                      const BitiTransferReceiveStarted(),
-                    ),
+                  const BitiTransferReceiveStarted(),
+                ),
                 icon: const Icon(Icons.download_rounded),
                 label: const Text('Accueillir'),
               ),
@@ -193,8 +189,8 @@ class _BitiTransferActionsBody extends StatelessWidget {
                 onPressed: profile == null
                     ? null
                     : () => context.read<BitiTransferBloc>().add(
-                          BitiTransferSendStarted(profile!),
-                        ),
+                        BitiTransferSendStarted(profile!),
+                      ),
                 icon: const Icon(Icons.upload_rounded),
                 label: const Text('Envoyer'),
               ),
@@ -214,7 +210,7 @@ class _BitiTransferActionsBody extends StatelessWidget {
 
 Widget _statusRow({required Widget child, required String text}) {
   return Row(
-    children: [
+    children: <Widget>[
       SizedBox(width: 24, height: 24, child: child),
       const SizedBox(width: 12),
       Expanded(child: Text(text)),

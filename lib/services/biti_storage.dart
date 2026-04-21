@@ -119,7 +119,9 @@ class BitiStorage {
     required int colorBArgb,
   }) async {
     final BitiCollection c = await loadCollection();
-    final String n = name.trim().isEmpty ? BitiProfile.defaultName : name.trim();
+    final String n = name.trim().isEmpty
+        ? BitiProfile.defaultName
+        : name.trim();
     final BitiProfile p = BitiProfile(
       id: BitiProfile.createId(),
       name: n,
@@ -127,9 +129,6 @@ class BitiStorage {
       energy: 80,
       mood: 72,
       xp: 0,
-      sleeping: false,
-      isDead: false,
-      themePresetIndex: 0,
       customColorA: colorAArgb,
       customColorB: colorBArgb,
     );
@@ -176,9 +175,6 @@ class BitiStorage {
       energy: 80,
       mood: 72,
       xp: 0,
-      sleeping: false,
-      isDead: false,
-      themePresetIndex: 0,
       customColorA: d.a.toARGB32(),
       customColorB: d.b.toARGB32(),
     );

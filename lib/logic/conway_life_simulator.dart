@@ -6,10 +6,6 @@ import 'conway_rle.dart';
 
 /// Simulation du jeu de la vie sur une grille **w × h** (bords morts).
 class ConwayLifeSimulator {
-  /// Cellules mortes autour du motif RLE pour que le bord du **motif** ne coïncide
-  /// pas avec le bord du simulateur (voisins « manquants » → extinctions artificielles).
-  static const int finiteBoardMargin = 1;
-
   ConwayLifeSimulator._(this.width, this.height, List<List<bool>> alive)
     : _alive = alive,
       _next = List<List<bool>>.generate(
@@ -24,6 +20,22 @@ class ConwayLifeSimulator {
         height,
         (_) => List<int>.filled(width, -1),
       );
+
+  factory ConwayLifeSimulator.fromPattern(BitiConwayPattern p) {
+    final List<List<bool>> g = ConwayRle.decodeBodyToTightGrid(p.rleBody);
+    final List<List<bool>> padded = _paddedBoardFromTight(g, finiteBoardMargin);
+    final int ph = padded.length;
+    final int pw = padded.first.length;
+    final List<List<bool>> copy = List<List<bool>>.generate(
+      ph,
+      (int y) => List<bool>.from(padded[y]),
+    );
+    return ConwayLifeSimulator._(pw, ph, copy);
+  }
+
+  /// Cellules mortes autour du motif RLE pour que le bord du **motif** ne coïncide
+  /// pas avec le bord du simulateur (voisins « manquants » → extinctions artificielles).
+  static const int finiteBoardMargin = 1;
 
   final int width;
   final int height;
@@ -41,10 +53,7 @@ class ConwayLifeSimulator {
   ) {
     if (g.isEmpty) {
       final int s = 1 + 2 * margin;
-      return List<List<bool>>.generate(
-        s,
-        (_) => List<bool>.filled(s, false),
-      );
+      return List<List<bool>>.generate(s, (_) => List<bool>.filled(s, false));
     }
     final int gh = g.length;
     final int gw = g.first.length;
@@ -61,18 +70,6 @@ class ConwayLifeSimulator {
       }
     }
     return out;
-  }
-
-  factory ConwayLifeSimulator.fromPattern(BitiConwayPattern p) {
-    final List<List<bool>> g = ConwayRle.decodeBodyToTightGrid(p.rleBody);
-    final List<List<bool>> padded = _paddedBoardFromTight(g, finiteBoardMargin);
-    final int ph = padded.length;
-    final int pw = padded.first.length;
-    final List<List<bool>> copy = List<List<bool>>.generate(
-      ph,
-      (int y) => List<bool>.from(padded[y]),
-    );
-    return ConwayLifeSimulator._(pw, ph, copy);
   }
 
   /// Repart du motif (mêmes dimensions que la grille courante).

@@ -95,7 +95,7 @@ class LifecycleService extends ChangeNotifier {
 
   /// Niveau de taille dérivé de l’XP (voir [CreatureGrowth.maxGrowthLevel]).
   //   int get growthLevel => CreatureGrowth.levelFromXp(xp);
-  int get growthLevel => 2;
+  int get growthLevel => 5;
 
   CreatureMood get derivedMood {
     if (_dead) return CreatureMood.idle;

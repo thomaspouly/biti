@@ -148,13 +148,14 @@ class BitiTransferService {
 
   /// Références des caractéristiques locales (pour [notifyCharacteristic]).
   GATTCharacteristic? _localTransfer;
-  GATTCharacteristic? _localAck;
-  GATTCharacteristic? _localRole;
+  late GATTCharacteristic? _localAck;
+  late GATTCharacteristic? _localRole;
 
   bool _busy = false;
   bool _disposed = false;
   Timer? _timeout;
-  final List<StreamSubscription<dynamic>> _subs = [];
+  final List<StreamSubscription<dynamic>> _subs =
+      <StreamSubscription<dynamic>>[];
 
   Peripheral? _remotePeripheral;
   Central? _remoteCentral;
@@ -181,7 +182,7 @@ class BitiTransferService {
   Completer<void>? _ackCompleter;
   Completer<void>? _assemblyCompleter;
 
-  final Map<int, Uint8List> _chunkMap = {};
+  final Map<int, Uint8List> _chunkMap = <int, Uint8List>{};
 
   /// Permissions + Bluetooth, puis scan GAP uniquement (l’autre doit être en [startReceive]).
   Future<void> startSend(BitiProfile currentProfile) async {
@@ -197,7 +198,7 @@ class BitiTransferService {
         return;
       }
 
-      await _central.startDiscovery(serviceUUIDs: [_svc]);
+      await _central.startDiscovery(serviceUUIDs: <UUID>[_svc]);
       _emit(const BitiTransferState.searching());
 
       _timeout?.cancel();
@@ -231,7 +232,7 @@ class BitiTransferService {
 
       await _registerGattService();
       await _peripheral.startAdvertising(
-        Advertisement(name: 'Biti', serviceUUIDs: [_svc]),
+        Advertisement(name: 'Biti', serviceUUIDs: <UUID>[_svc]),
       );
       _emit(const BitiTransferState.searching());
 
@@ -399,50 +400,54 @@ class BitiTransferService {
 
     _localTransfer = GATTCharacteristic.mutable(
       uuid: _uuidTransfer,
-      properties: const [
+      properties: const <GATTCharacteristicProperty>[
         GATTCharacteristicProperty.read,
         GATTCharacteristicProperty.write,
         GATTCharacteristicProperty.writeWithoutResponse,
         GATTCharacteristicProperty.notify,
       ],
-      permissions: const [
+      permissions: const <GATTCharacteristicPermission>[
         GATTCharacteristicPermission.read,
         GATTCharacteristicPermission.write,
       ],
-      descriptors: const [],
+      descriptors: const <GATTDescriptor>[],
     );
     _localAck = GATTCharacteristic.mutable(
       uuid: _uuidAck,
-      properties: const [
+      properties: const <GATTCharacteristicProperty>[
         GATTCharacteristicProperty.read,
         GATTCharacteristicProperty.write,
         GATTCharacteristicProperty.writeWithoutResponse,
       ],
-      permissions: const [
+      permissions: const <GATTCharacteristicPermission>[
         GATTCharacteristicPermission.read,
         GATTCharacteristicPermission.write,
       ],
-      descriptors: const [],
+      descriptors: const <GATTDescriptor>[],
     );
     _localRole = GATTCharacteristic.mutable(
       uuid: _uuidRole,
-      properties: const [
+      properties: const <GATTCharacteristicProperty>[
         GATTCharacteristicProperty.read,
         GATTCharacteristicProperty.write,
         GATTCharacteristicProperty.writeWithoutResponse,
       ],
-      permissions: const [
+      permissions: const <GATTCharacteristicPermission>[
         GATTCharacteristicPermission.read,
         GATTCharacteristicPermission.write,
       ],
-      descriptors: const [],
+      descriptors: const <GATTDescriptor>[],
     );
 
     final GATTService service = GATTService(
       uuid: _svc,
       isPrimary: true,
-      includedServices: const [],
-      characteristics: [_localTransfer!, _localAck!, _localRole!],
+      includedServices: const <GATTService>[],
+      characteristics: <GATTCharacteristic>[
+        _localTransfer!,
+        _localAck!,
+        _localRole!,
+      ],
     );
     await _peripheral.addService(service);
   }
@@ -648,8 +653,8 @@ class BitiTransferService {
     }
     if (v[0] == 0x10 && v.length >= 6) {
       final ByteData bd = ByteData.sublistView(v, 0, 6);
-      final int idx = bd.getUint16(1, Endian.big);
-      final int total = bd.getUint16(3, Endian.big);
+      final int idx = bd.getUint16(1);
+      final int total = bd.getUint16(3);
       final Uint8List payload = Uint8List.sublistView(v, 5);
       _chunkMap[idx] = payload;
       _emit(
@@ -688,8 +693,8 @@ class BitiTransferService {
     }
     if (tag == 0x10 && value.length >= 6) {
       final ByteData bd = ByteData.sublistView(value, 0, 6);
-      final int idx = bd.getUint16(1, Endian.big);
-      final int total = bd.getUint16(3, Endian.big);
+      final int idx = bd.getUint16(1);
+      final int total = bd.getUint16(3);
       final Uint8List payload = Uint8List.sublistView(value, 5);
       _chunkMap[idx] = payload;
       _emit(
@@ -801,8 +806,8 @@ class BitiTransferService {
     final Uint8List meta = Uint8List(8);
     meta[0] = 0x11;
     final ByteData m = ByteData.sublistView(meta);
-    m.setUint32(1, json.length, Endian.big);
-    m.setUint16(5, total, Endian.big);
+    m.setUint32(1, json.length);
+    m.setUint16(5, total);
 
     await _emitFrame(meta, isCentral: isCentral);
     for (int i = 0; i < total; i++) {
@@ -812,8 +817,8 @@ class BitiTransferService {
       final Uint8List frame = Uint8List(5 + piece.length);
       frame[0] = 0x10;
       final ByteData h = ByteData.sublistView(frame, 0, 5);
-      h.setUint16(1, i, Endian.big);
-      h.setUint16(3, total, Endian.big);
+      h.setUint16(1, i);
+      h.setUint16(3, total);
       frame.setRange(5, frame.length, piece);
       await _emitFrame(frame, isCentral: isCentral);
       _emit(BitiTransferState.sending(chunksDone: i + 1, chunksTotal: total));

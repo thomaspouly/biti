@@ -40,9 +40,7 @@ List<Color> bitiSpriteTintPalette() {
     Color(0xFFFF6B6B),
     Color(0xFF2ECC71),
   ];
-  for (final Color c in accents) {
-    add(c);
-  }
+  accents.forEach(add);
   return out;
 }
 
@@ -67,7 +65,6 @@ Future<int?> showBitiTintPickerDialog(
               crossAxisCount: 8,
               mainAxisSpacing: 5,
               crossAxisSpacing: 5,
-              childAspectRatio: 1,
             ),
             itemCount: palette.length,
             itemBuilder: (BuildContext _, int i) {
